@@ -15,6 +15,22 @@ logger = logging.getLogger(__name__)
 
 GROUP_ID = config.GROUP_ID
 
+async def is_admin(update: Update):
+    """بررسی می‌کند که کاربر ادمین گروه است یا خیر"""
+    try:
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        
+        # دریافت لیست ادمین‌ها
+        admins = await update.get_bot().get_chat_administrators(chat_id)
+        for admin in admins:
+            if admin.user.id == user_id:
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"خطا در بررسی ادمین: {e}")
+        return False
+
 async def update_members():
     """به‌روزرسانی لیست اعضا با Telethon"""
     try:
@@ -73,8 +89,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🤖 **ربات زوج‌یاب**\n\n"
         "دستورات:\n"
         "/start - این پیام\n"
-        "/couple - انتخاب زوج\n"
-        "/update - به‌روزرسانی لیست\n"
+        "/couple - انتخاب زوج (فقط ادمین‌ها)\n"
+        "/update - به‌روزرسانی لیست (فقط ادمین‌ها)\n"
         "/last - آخرین زوج\n"
         "/count - تعداد اعضا",
         parse_mode="Markdown"
@@ -82,8 +98,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    
+    # چک کردن اینکه کاربر در گروه است
     if chat_id != GROUP_ID:
-        await update.message.reply_text("❌ فقط در گروه کار می‌کند.")
+        await update.message.reply_text("❌ این دستور فقط در گروه اصلی کار می‌کند.")
+        return
+    
+    # چک کردن ادمین بودن
+    if not await is_admin(update):
+        await update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
         return
     
     await update.message.reply_text("🔄 در حال انتخاب...")
@@ -92,8 +115,14 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    
     if chat_id != GROUP_ID:
-        await update.message.reply_text("❌ فقط در گروه کار می‌کند.")
+        await update.message.reply_text("❌ این دستور فقط در گروه اصلی کار می‌کند.")
+        return
+    
+    # چک کردن ادمین بودن
+    if not await is_admin(update):
+        await update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
         return
     
     await update.message.reply_text("🔄 در حال به‌روزرسانی...")
@@ -123,7 +152,6 @@ def main():
     application.add_handler(CommandHandler("last", last_command))
     application.add_handler(CommandHandler("count", count_command))
     
-    # بررسی JobQueue
     job_queue = application.job_queue
     if job_queue:
         job_queue.run_repeating(
