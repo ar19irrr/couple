@@ -1,4 +1,3 @@
-import asyncio
 from telethon import TelegramClient
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
@@ -6,6 +5,7 @@ import config
 from database import set_members
 
 async def get_all_members():
+    """دریافت همه اعضای گروه با Telethon (اصلاح شده)"""
     try:
         client = TelegramClient('session', config.API_ID, config.API_HASH)
         await client.start()
@@ -48,6 +48,3 @@ async def get_all_members():
     except Exception as e:
         print(f"❌ خطا: {e}")
         return []
-
-if __name__ == "__main__":
-    asyncio.run(get_all_members())
