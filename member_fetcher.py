@@ -1,19 +1,29 @@
+import os
 import asyncio
 from telethon import TelegramClient, errors
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
 
+# مسیر فایل نشست رو به صورت کامل مشخص کن
+SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
+
 async def get_all_members(chat_id):
-    """دریافت همه اعضای یک گروه با Telethon با مدیریت صحیح اتصال"""
-    client = TelegramClient('session', config.API_ID, config.API_HASH)
+    """دریافت همه اعضای یک گروه با Telethon"""
     try:
-        # استفاده از async with برای مدیریت خودکار اتصال
+        # چک کردن وجود فایل نشست
+        if not os.path.exists(SESSION_FILE):
+            print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
+            return []
+            
+        print(f"✅ فایل نشست در مسیر {SESSION_FILE} پیدا شد.")
+        
+        # ساخت کلاینت با مسیر کامل
+        client = TelegramClient(SESSION_FILE, config.API_ID, config.API_HASH)
+        
         async with client:
-            # اطمینان از اینکه client آماده است
             await client.start()
             
-            # دریافت entity گروه
             entity = await client.get_entity(chat_id)
             if entity is None:
                 print(f"❌ گروه با شناسه {chat_id} یافت نشد.")
@@ -25,7 +35,6 @@ async def get_all_members(chat_id):
             
             while True:
                 try:
-                    # دریافت لیست اعضا با timeout
                     participants = await asyncio.wait_for(
                         client(GetParticipantsRequest(
                             channel=entity,
@@ -34,7 +43,7 @@ async def get_all_members(chat_id):
                             limit=limit,
                             hash=0
                         )),
-                        timeout=30  # 30 ثانیه timeout
+                        timeout=30
                     )
                     
                     if not participants or not participants.users:
@@ -68,16 +77,9 @@ async def get_all_members(chat_id):
     except errors.rpcerrorlist.ApiIdInvalidError:
         print("❌ خطا: API_ID یا API_HASH نامعتبر است.")
         return []
+    except FileNotFoundError:
+        print(f"❌ فایل نشست {SESSION_FILE} وجود ندارد!")
+        return []
     except Exception as e:
         print(f"❌ خطای کلی در دریافت اعضا: {e}")
         return []
-
-# تابع تست برای اجرای مستقل
-async def main():
-    # اینجا می‌توانید یک chat_id را برای تست وارد کنید
-    chat_id = config.GROUP_ID  # در صورت نیاز متغیر GROUP_ID را در config تعریف کنید
-    members = await get_all_members(chat_id)
-    print(f"تعداد کل اعضا: {len(members)}")
-
-if __name__ == "__main__":
-    asyncio.run(main())
