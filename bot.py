@@ -22,7 +22,6 @@ def home():
     return "ربات زوج‌یاب فعال است! 🚀"
 
 def run_flask():
-    """اجرای وب‌سرور Flask در پورت ۱۰۰۰۰"""
     port = 10000
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
@@ -60,28 +59,10 @@ JOKE_MESSAGES = [
 
 # ==================== توابع کمکی ====================
 def is_admin(update, context):
-    """بررسی ادمین بودن کاربر (شامل مالک گروه) - نسخه ساده شده"""
-    try:
-        # دریافت اطلاعات کاربر
-        user_id = update.effective_user.id
-        chat_id = update.effective_chat.id
-        
-        # دریافت وضعیت کاربر از تلگرام
-        bot = context.bot
-        member = bot.get_chat_member(chat_id, user_id)
-        
-        # اگه کاربر مالک (creator) یا ادمین (administrator) باشه
-        if member.status in ['creator', 'administrator']:
-            return True
-        return False
-        
-    except Exception as e:
-        # در صورت بروز خطا، لاگ می‌کنیم و False برمی‌گردونیم
-        logger.error(f"خطا در بررسی ادمین: {e}")
-        return False
+    """همیشه True برمی‌گردونه تا دستورات برای همه کار کنه"""
+    return True
 
 def update_members_sync(chat_id):
-    """به‌روزرسانی لیست اعضا"""
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -100,25 +81,18 @@ def update_members_sync(chat_id):
 def start(update: Update, context: CallbackContext):
     update.message.reply_text(
         "🤖 **ربات زوج‌یاب حرفه‌ای**\n\n"
-        "📌 **دستورات عمومی:**\n"
+        "📌 **دستورات:**\n"
         "/start - این پیام\n"
-        "/couple - انتخاب زوج (فقط ادمین‌ها)\n"
+        "/couple - انتخاب زوج\n"
         "/count - تعداد اعضا\n"
         "/last - آخرین زوج\n"
         "/history - تاریخچه زوج‌ها\n"
-        "/stats - آمار گروه\n\n"
-        "⚠️ نکته: ربات باید ادمین باشد.",
+        "/stats - آمار گروه",
         parse_mode="Markdown"
     )
 
 def couple_command(update: Update, context: CallbackContext):
-    """انتخاب زوج (فقط ادمین‌ها)"""
     chat_id = update.effective_chat.id
-    
-    if not is_admin(update, context):
-        update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
-        return
-    
     update.message.reply_text("🔄 در حال انتخاب زوج...")
     
     members = update_members_sync(chat_id)
@@ -131,8 +105,7 @@ def couple_command(update: Update, context: CallbackContext):
     
     if len(available_members) < 2:
         update.message.reply_text(
-            "❌ تعداد اعضای قابل انتخاب کافی نیست (حداقل ۲ نفر).\n"
-            "⏳ ممکن است اعضا در لیست سیاه ۷ روزه باشند."
+            "❌ تعداد اعضای قابل انتخاب کافی نیست (حداقل ۲ نفر)."
         )
         return
     
@@ -154,16 +127,11 @@ def couple_command(update: Update, context: CallbackContext):
     update.message.reply_text(msg, parse_mode="Markdown")
     clear_blocked_users(chat_id)
     
-    logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}: {user1['name']} و {user2['name']}")
+    logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
 def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
-    
-    if not is_admin(update, context):
-        update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
-        return
-    
-    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند ثانیه)")
+    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا...")
     
     members = update_members_sync(chat_id)
     if members and len(members) > 0:
@@ -239,63 +207,18 @@ def stats_command(update: Update, context: CallbackContext):
     update.message.reply_text(msg, parse_mode="Markdown")
 
 def reset_command(update: Update, context: CallbackContext):
-    if not is_admin(update, context):
-        update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
-        return
-    
     clear_data()
     update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
-def daily_job(context: CallbackContext):
-    chat_id = context.job.context
-    bot = context.bot
-    
-    logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
-    
-    members = update_members_sync(chat_id)
-    if not members:
-        logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}")
-        return
-    
-    blocked = get_blocked_users(chat_id)
-    available_members = [m for m in members if m["id"] not in blocked]
-    
-    if len(available_members) < 2:
-        bot.send_message(
-            chat_id=chat_id,
-            text="❌ تعداد اعضای قابل انتخاب کافی نیست."
-        )
-        return
-    
-    user1, user2 = random.sample(available_members, 2)
-    save_couple(chat_id, user1, user2)
-    
-    msg = random.choice(COUPLE_MESSAGES) + "\n\n"
-    msg += f"به پای هم پیر سیر دیر و عاشق باشید 🫂\n"
-    msg += f"پایدار تا پای دار \n"
-    msg += f"باهم بمیرید زنده شوید \n"
-    msg += f"{random.choice(JOKE_MESSAGES)}\n\n"
-    msg += f"👤 {user1['name']}\n"
-    msg += f"یوزرنیم: @{user1['username']}\n"
-    msg += f"❤️ با ❤️\n"
-    msg += f"👤 {user2['name']}\n"
-    msg += f"یوزرنیم: @{user2['username']}\n\n"
-    msg += random.choice(CELEBRATION_MESSAGES)
-    
-    bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
-    clear_blocked_users(chat_id)
-    
-    logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
-
 # ==================== اجرای اصلی ====================
 def main():
-    # 1. اجرای وب‌سرور Flask در یک ترد جداگانه
+    # اجرای Flask
     flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True  # با بسته شدن برنامه، ترد هم بسته میشه
+    flask_thread.daemon = True
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
-    # 2. اجرای ربات تلگرام
+    # اجرای ربات
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
@@ -307,17 +230,6 @@ def main():
     dp.add_handler(CommandHandler("history", history_command))
     dp.add_handler(CommandHandler("stats", stats_command))
     dp.add_handler(CommandHandler("reset", reset_command))
-    
-    job_queue = updater.job_queue
-    if job_queue:
-        # برای فعال کردن انتخاب خودکار روزانه، این بخش رو فعال کن
-        # job_queue.run_repeating(
-        #     daily_job,
-        #     interval=86400,
-        #     first=10,
-        #     context=config.GROUP_ID  # اگر GROUP_ID داری
-        # )
-        pass
     
     logger.info("🚀 ربات شروع به کار کرد...")
     updater.start_polling()
