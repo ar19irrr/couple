@@ -1,5 +1,3 @@
 BOT_TOKEN = "8858810413:AAGbvBzQ3lQzi_epN47QSmaOh8Ec1hgz0CE"
-
-# اطلاعات API (از my.telegram.org)
 API_ID = 2040
 API_HASH = "b18441a1ff607e10a989891a5462e627"
