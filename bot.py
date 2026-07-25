@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 
 GROUP_ID = config.GROUP_ID
 
-def update_members():
-    """به‌روزرسانی لیست اعضا با Telethon"""
+async def update_members():
+    """به‌روزرسانی لیست اعضا با Telethon (اصلاح شده)"""
     try:
-        members = asyncio.run(get_all_members())
+        members = await get_all_members()
         return members
     except Exception as e:
         logger.error(f"❌ خطا در دریافت اعضا: {e}")
@@ -66,7 +66,7 @@ async def daily_job(context: ContextTypes.DEFAULT_TYPE):
     application = context.application
     
     logger.info("🔄 انتخاب زوج روزانه...")
-    update_members()
+    await update_members()
     await select_couple(application, chat_id)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -88,7 +88,7 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     await update.message.reply_text("🔄 در حال انتخاب...")
-    update_members()
+    await update_members()
     await select_couple(context.application, chat_id)
 
 async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -98,7 +98,7 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     await update.message.reply_text("🔄 در حال به‌روزرسانی...")
-    members = update_members()
+    members = await update_members()
     await update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
 
 async def last_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
