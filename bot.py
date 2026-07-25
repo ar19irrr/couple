@@ -3,7 +3,7 @@ import random
 import asyncio
 from datetime import timedelta
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import Application, CommandHandler, ContextTypes
 import config
 from database import get_members, set_members, save_couple, get_last_couple
 from member_fetcher import get_all_members
@@ -25,11 +25,11 @@ def update_members():
         logger.error(f"❌ خطا در دریافت اعضا: {e}")
         return []
 
-def select_couple(bot, chat_id):
+async def select_couple(application, chat_id):
     members = get_members()
     
     if len(members) < 2:
-        bot.send_message(
+        await application.bot.send_message(
             chat_id=chat_id,
             text="❌ تعداد اعضا کافی نیست (حداقل ۲ نفر)"
         )
@@ -53,7 +53,7 @@ def select_couple(bot, chat_id):
         f"بچه هاتون از سر کولتون بالا برن یا کوه 😄"
     )
     
-    bot.send_message(
+    await application.bot.send_message(
         chat_id=chat_id,
         text=msg,
         parse_mode="Markdown"
@@ -61,16 +61,16 @@ def select_couple(bot, chat_id):
     
     logger.info(f"✅ زوج انتخاب شد: {user1['name']} و {user2['name']}")
 
-def daily_job(context: CallbackContext):
-    chat_id = context.job.context
-    bot = context.bot
+async def daily_job(context: ContextTypes.DEFAULT_TYPE):
+    chat_id = context.job.chat_id
+    application = context.application
     
     logger.info("🔄 انتخاب زوج روزانه...")
     update_members()
-    select_couple(bot, chat_id)
+    await select_couple(application, chat_id)
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text(
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
         "🤖 **ربات زوج‌یاب**\n\n"
         "دستورات:\n"
         "/start - این پیام\n"
@@ -81,67 +81,61 @@ def start(update: Update, context: CallbackContext):
         parse_mode="Markdown"
     )
 
-def couple_command(update: Update, context: CallbackContext):
+async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if chat_id != GROUP_ID:
-        update.message.reply_text("❌ فقط در گروه کار می‌کند.")
+        await update.message.reply_text("❌ فقط در گروه کار می‌کند.")
         return
     
-    update.message.reply_text("🔄 در حال انتخاب...")
+    await update.message.reply_text("🔄 در حال انتخاب...")
     update_members()
-    select_couple(context.bot, chat_id)
+    await select_couple(context.application, chat_id)
 
-def update_command(update: Update, context: CallbackContext):
+async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if chat_id != GROUP_ID:
-        update.message.reply_text("❌ فقط در گروه کار می‌کند.")
+        await update.message.reply_text("❌ فقط در گروه کار می‌کند.")
         return
     
-    update.message.reply_text("🔄 در حال به‌روزرسانی...")
+    await update.message.reply_text("🔄 در حال به‌روزرسانی...")
     members = update_members()
-    update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
+    await update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
 
-def last_command(update: Update, context: CallbackContext):
+async def last_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     last = get_last_couple()
     if last and last.get("user1"):
         u1 = last["user1"]
         u2 = last["user2"]
         msg = f"📅 آخرین زوج:\n\n👤 {u1['name']} (@{u1['username']})\n❤️ با\n👤 {u2['name']} (@{u2['username']})"
-        update.message.reply_text(msg)
+        await update.message.reply_text(msg)
     else:
-        update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
+        await update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
 
-def count_command(update: Update, context: CallbackContext):
+async def count_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     members = get_members()
-    update.message.reply_text(f"👥 تعداد اعضا: {len(members)} نفر")
+    await update.message.reply_text(f"👥 تعداد اعضا: {len(members)} نفر")
 
 def main():
-    updater = Updater(token=config.BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    application = Application.builder().token(config.BOT_TOKEN).build()
     
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("couple", couple_command))
-    dp.add_handler(CommandHandler("update", update_command))
-    dp.add_handler(CommandHandler("last", last_command))
-    dp.add_handler(CommandHandler("count", count_command))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("couple", couple_command))
+    application.add_handler(CommandHandler("update", update_command))
+    application.add_handler(CommandHandler("last", last_command))
+    application.add_handler(CommandHandler("count", count_command))
     
-    job_queue = updater.job_queue
+    job_queue = application.job_queue
     if job_queue:
         job_queue.run_repeating(
             daily_job,
             interval=86400,
             first=10,
-            context=GROUP_ID
+            chat_id=GROUP_ID
         )
         logger.info("✅ کار روزانه تنظیم شد.")
     
-    # به‌روزرسانی اولیه
-    logger.info("🔄 در حال دریافت لیست اعضا...")
-    update_members()
-    
     logger.info("🚀 ربات شروع به کار کرد...")
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
