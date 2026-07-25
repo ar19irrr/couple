@@ -5,13 +5,13 @@ from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
 
-# مسیر فایل نشست رو به صورت کامل مشخص کن
+# مسیر فایل نشست
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
 async def get_all_members(chat_id):
     """دریافت همه اعضای یک گروه با Telethon"""
     try:
-        # چک کردن وجود فایل نشست
+        # بررسی وجود فایل نشست
         if not os.path.exists(SESSION_FILE):
             print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
             return []
@@ -83,3 +83,14 @@ async def get_all_members(chat_id):
     except Exception as e:
         print(f"❌ خطای کلی در دریافت اعضا: {e}")
         return []
+
+# تابع تست برای اجرای مستقل
+async def test():
+    chat_id = -1001393393400  # آیدی گروه خودت رو بذار
+    members = await get_all_members(chat_id)
+    print(f"تعداد کل اعضا: {len(members)}")
+    for m in members[:5]:  # ۵ تا اول رو نشون بده
+        print(f"  - {m['name']} (@{m['username']})")
+
+if __name__ == "__main__":
+    asyncio.run(test())
