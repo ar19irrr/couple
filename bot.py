@@ -44,16 +44,17 @@ JOKE_MESSAGES = [
 ]
 
 # ==================== توابع کمکی ====================
-def is_admin(update):
+def is_admin(update, context):
     """بررسی ادمین بودن کاربر (شامل مالک گروه)"""
     try:
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
         
-        # دریافت اطلاعات کاربر در گروه
-        member = update.get_bot().get_chat_member(chat_id, user_id)
+        # دریافت اطلاعات کاربر از خود تلگرام
+        bot = context.bot
+        member = bot.get_chat_member(chat_id, user_id)
         
-        # بررسی وضعیت کاربر (creator = مالک, administrator = ادمین)
+        # اگه کاربر مالک یا ادمین باشه
         if member.status in ['creator', 'administrator']:
             return True
         return False
@@ -97,23 +98,18 @@ def couple_command(update: Update, context: CallbackContext):
     """انتخاب زوج (فقط ادمین‌ها)"""
     chat_id = update.effective_chat.id
     
-    # ایده ۳: محدودیت ادمین
-    if not is_admin(update):
+    if not is_admin(update, context):
         update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
         return
     
     update.message.reply_text("🔄 در حال انتخاب زوج...")
     
-    # به‌روزرسانی لیست اعضا
     members = update_members_sync(chat_id)
     if not members:
         update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است و VPN روشن است.")
         return
     
-    # دریافت لیست سیاه
     blocked = get_blocked_users(chat_id)
-    
-    # فیلتر کردن اعضای مسدود
     available_members = [m for m in members if m["id"] not in blocked]
     
     if len(available_members) < 2:
@@ -123,13 +119,9 @@ def couple_command(update: Update, context: CallbackContext):
         )
         return
     
-    # انتخاب دو عضو متفاوت
     user1, user2 = random.sample(available_members, 2)
-    
-    # ذخیره زوج
     save_couple(chat_id, user1, user2)
     
-    # ایده ۴: پیام‌های متنوع
     msg = random.choice(COUPLE_MESSAGES) + "\n\n"
     msg += f"به پای هم پیر سیر دیر و عاشق باشید 🫂\n"
     msg += f"پایدار تا پای دار \n"
@@ -143,8 +135,6 @@ def couple_command(update: Update, context: CallbackContext):
     msg += random.choice(CELEBRATION_MESSAGES)
     
     update.message.reply_text(msg, parse_mode="Markdown")
-    
-    # پاک کردن لیست سیاه منقضی شده
     clear_blocked_users(chat_id)
     
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}: {user1['name']} و {user2['name']}")
@@ -152,7 +142,7 @@ def couple_command(update: Update, context: CallbackContext):
 def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     
-    if not is_admin(update):
+    if not is_admin(update, context):
         update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
         return
     
@@ -196,7 +186,6 @@ def count_command(update: Update, context: CallbackContext):
     update.message.reply_text(msg, parse_mode="Markdown")
 
 def history_command(update: Update, context: CallbackContext):
-    """تاریخچه زوج‌ها"""
     chat_id = update.effective_chat.id
     history = get_couple_history(chat_id, 10)
     
@@ -216,7 +205,6 @@ def history_command(update: Update, context: CallbackContext):
     update.message.reply_text(msg, parse_mode="Markdown")
 
 def stats_command(update: Update, context: CallbackContext):
-    """آمار و گزارش"""
     chat_id = update.effective_chat.id
     stats = get_stats(chat_id)
     
@@ -234,8 +222,7 @@ def stats_command(update: Update, context: CallbackContext):
     update.message.reply_text(msg, parse_mode="Markdown")
 
 def reset_command(update: Update, context: CallbackContext):
-    """ریست دیتابیس (فقط ادمین)"""
-    if not is_admin(update):
+    if not is_admin(update, context):
         update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
         return
     
@@ -243,19 +230,16 @@ def reset_command(update: Update, context: CallbackContext):
     update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
 def daily_job(context: CallbackContext):
-    """انتخاب خودکار روزانه (ایده ۲)"""
     chat_id = context.job.context
     bot = context.bot
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
     
-    # به‌روزرسانی اعضا
     members = update_members_sync(chat_id)
     if not members:
         logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}")
         return
     
-    # دریافت لیست سیاه
     blocked = get_blocked_users(chat_id)
     available_members = [m for m in members if m["id"] not in blocked]
     
@@ -266,11 +250,9 @@ def daily_job(context: CallbackContext):
         )
         return
     
-    # انتخاب زوج
     user1, user2 = random.sample(available_members, 2)
     save_couple(chat_id, user1, user2)
     
-    # پیام
     msg = random.choice(COUPLE_MESSAGES) + "\n\n"
     msg += f"به پای هم پیر سیر دیر و عاشق باشید 🫂\n"
     msg += f"پایدار تا پای دار \n"
@@ -293,7 +275,6 @@ def main():
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
-    # دستورات
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("couple", couple_command))
     dp.add_handler(CommandHandler("update", update_command))
@@ -303,19 +284,14 @@ def main():
     dp.add_handler(CommandHandler("stats", stats_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
-    # ایده ۲: انتخاب خودکار روزانه (هر ۲۴ ساعت)
     job_queue = updater.job_queue
     if job_queue:
-        # برای هر گروهی که ربات فعال است، یک job تنظیم می‌کنیم
-        # اینجا فقط برای گروه پیش‌فرض تنظیم میکنیم
-        # برای پویا کردن، باید در دیتابیس لیست گروه‌ها رو نگهداری کنیم
-        
-        # مثال: تنظیم برای یک گروه خاص (در صورت نیاز)
+        # برای فعال کردن انتخاب خودکار روزانه، این بخش رو فعال کن
         # job_queue.run_repeating(
         #     daily_job,
         #     interval=86400,
         #     first=10,
-        #     context=config.GROUP_ID  # اگر GROUP_ID دارید
+        #     context=config.GROUP_ID  # اگر GROUP_ID داری
         # )
         pass
     
