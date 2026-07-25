@@ -1,6 +1,7 @@
 import logging
 import random
 import asyncio
+import threading
 from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext
@@ -11,6 +12,9 @@ from database import (
     get_stats, clear_data
 )
 from member_fetcher import get_all_members
+
+# اضافه کردن وب‌سرور
+from web_server import run_web_server
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -50,11 +54,9 @@ def is_admin(update, context):
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
         
-        # دریافت اطلاعات کاربر از خود تلگرام
         bot = context.bot
         member = bot.get_chat_member(chat_id, user_id)
         
-        # اگه کاربر مالک یا ادمین باشه
         if member.status in ['creator', 'administrator']:
             return True
         return False
@@ -90,7 +92,7 @@ def start(update: Update, context: CallbackContext):
         "/last - آخرین زوج\n"
         "/history - تاریخچه زوج‌ها\n"
         "/stats - آمار گروه\n\n"
-        "⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد.",
+        "⚠️ نکته: ربات باید ادمین باشد.",
         parse_mode="Markdown"
     )
 
@@ -106,7 +108,7 @@ def couple_command(update: Update, context: CallbackContext):
     
     members = update_members_sync(chat_id)
     if not members:
-        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است و VPN روشن است.")
+        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
         return
     
     blocked = get_blocked_users(chat_id)
@@ -152,7 +154,7 @@ def update_command(update: Update, context: CallbackContext):
     if members and len(members) > 0:
         update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
     else:
-        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است و VPN روشن است.")
+        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
 
 def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -272,6 +274,12 @@ def daily_job(context: CallbackContext):
 
 # ==================== اجرای اصلی ====================
 def main():
+    # اجرای وب‌سرور در یک ترد جداگانه (برای Render)
+    web_thread = threading.Thread(target=run_web_server, daemon=True)
+    web_thread.start()
+    logger.info("🌐 وب‌سرور روی پورت ۱۰۰۰۰ شروع به کار کرد...")
+    
+    # اجرای ربات تلگرام
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
