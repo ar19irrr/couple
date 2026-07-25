@@ -3,6 +3,7 @@ import random
 import asyncio
 import threading
 from datetime import datetime, timedelta
+from flask import Flask
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext
 import config
@@ -13,9 +14,19 @@ from database import (
 )
 from member_fetcher import get_all_members
 
-# اضافه کردن وب‌سرور
-from web_server import run_web_server
+# ==================== راه‌اندازی Flask ====================
+app = Flask(__name__)
 
+@app.route('/')
+def home():
+    return "ربات زوج‌یاب فعال است! 🚀"
+
+def run_flask():
+    """اجرای وب‌سرور Flask در پورت ۱۰۰۰۰"""
+    port = 10000
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+# ==================== تنظیمات لاگ ====================
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -49,19 +60,23 @@ JOKE_MESSAGES = [
 
 # ==================== توابع کمکی ====================
 def is_admin(update, context):
-    """بررسی ادمین بودن کاربر (شامل مالک گروه)"""
+    """بررسی ادمین بودن کاربر (شامل مالک گروه) - نسخه ساده شده"""
     try:
+        # دریافت اطلاعات کاربر
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
         
+        # دریافت وضعیت کاربر از تلگرام
         bot = context.bot
         member = bot.get_chat_member(chat_id, user_id)
         
+        # اگه کاربر مالک (creator) یا ادمین (administrator) باشه
         if member.status in ['creator', 'administrator']:
             return True
         return False
         
     except Exception as e:
+        # در صورت بروز خطا، لاگ می‌کنیم و False برمی‌گردونیم
         logger.error(f"خطا در بررسی ادمین: {e}")
         return False
 
@@ -274,12 +289,13 @@ def daily_job(context: CallbackContext):
 
 # ==================== اجرای اصلی ====================
 def main():
-    # اجرای وب‌سرور در یک ترد جداگانه (برای Render)
-    web_thread = threading.Thread(target=run_web_server, daemon=True)
-    web_thread.start()
-    logger.info("🌐 وب‌سرور روی پورت ۱۰۰۰۰ شروع به کار کرد...")
+    # 1. اجرای وب‌سرور Flask در یک ترد جداگانه
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True  # با بسته شدن برنامه، ترد هم بسته میشه
+    flask_thread.start()
+    logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
-    # اجرای ربات تلگرام
+    # 2. اجرای ربات تلگرام
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
