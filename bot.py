@@ -14,7 +14,7 @@ from database import (
 )
 from member_fetcher import get_all_members
 
-# ==================== راه‌اندازی Flask ====================
+# ==================== Flask ====================
 app = Flask(__name__)
 
 @app.route('/')
@@ -25,20 +25,20 @@ def run_flask():
     port = 10000
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
-# ==================== تنظیمات لاگ ====================
+# ==================== تنظیمات ====================
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# ==================== پیام‌های متنوع ====================
+# ==================== پیام‌ها ====================
 COUPLE_MESSAGES = [
-    "💞 **زوج جذاب امروز** 💞",
-    "🔥 **عشق امروز** 🔥",
-    "💖 **این دو تا عاشق شدن** 💖",
-    "🎯 **قرعه‌کشی امروز** 🎯",
-    "💘 **زوج منتخب امروز** 💘"
+    "💞 زوج جذاب امروز 💞",
+    "🔥 عشق امروز 🔥",
+    "💖 این دو تا عاشق شدن 💖",
+    "🎯 قرعه‌کشی امروز 🎯",
+    "💘 زوج منتخب امروز 💘"
 ]
 
 CELEBRATION_MESSAGES = [
@@ -57,10 +57,9 @@ JOKE_MESSAGES = [
     "دنیا رو به هم ببافید و عاشق باشید 🌍❤️"
 ]
 
-# ==================== توابع کمکی ====================
+# ==================== توابع ====================
 def is_admin(update, context):
-    """همیشه True برمی‌گردونه تا دستورات برای همه کار کنه"""
-    return True
+    return True  # همه میتونن استفاده کنن
 
 def update_members_sync(chat_id):
     try:
@@ -77,18 +76,20 @@ def update_members_sync(chat_id):
         logger.error(f"❌ خطا در دریافت اعضا: {e}")
         return []
 
-# ==================== دستورات اصلی ====================
+# ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
     update.message.reply_text(
-        "🤖 **ربات زوج‌یاب حرفه‌ای**\n\n"
-        "📌 **دستورات:**\n"
-        "/start - این پیام\n"
-        "/couple - انتخاب زوج\n"
-        "/count - تعداد اعضا\n"
-        "/last - آخرین زوج\n"
-        "/history - تاریخچه زوج‌ها\n"
-        "/stats - آمار گروه",
-        parse_mode="Markdown"
+        """🤖 ربات زوج‌یاب حرفه‌ای
+
+📌 دستورات:
+/start - این پیام
+/couple - انتخاب زوج
+/count - تعداد اعضا
+/last - آخرین زوج
+/history - تاریخچه زوج‌ها
+/stats - آمار گروه
+
+⚠️ نکته: ربات باید ادمین باشد."""
     )
 
 def couple_command(update: Update, context: CallbackContext):
@@ -112,19 +113,22 @@ def couple_command(update: Update, context: CallbackContext):
     user1, user2 = random.sample(available_members, 2)
     save_couple(chat_id, user1, user2)
     
-    msg = random.choice(COUPLE_MESSAGES) + "\n\n"
-    msg += f"به پای هم پیر سیر دیر و عاشق باشید 🫂\n"
-    msg += f"پایدار تا پای دار \n"
-    msg += f"باهم بمیرید زنده شوید \n"
-    msg += f"{random.choice(JOKE_MESSAGES)}\n\n"
-    msg += f"👤 {user1['name']}\n"
-    msg += f"یوزرنیم: @{user1['username']}\n"
-    msg += f"❤️ با ❤️\n"
-    msg += f"👤 {user2['name']}\n"
-    msg += f"یوزرنیم: @{user2['username']}\n\n"
-    msg += random.choice(CELEBRATION_MESSAGES)
+    msg = f"""{random.choice(COUPLE_MESSAGES)}
+
+به پای هم پیر سیر دیر و عاشق باشید 🫂
+پایدار تا پای دار 
+باهم بمیرید زنده شوید 
+{random.choice(JOKE_MESSAGES)}
+
+👤 {user1['name']}
+یوزرنیم: @{user1['username']}
+❤️ با ❤️
+👤 {user2['name']}
+یوزرنیم: @{user2['username']}
+
+{random.choice(CELEBRATION_MESSAGES)}"""
     
-    update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg)
     clear_blocked_users(chat_id)
     
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
@@ -146,15 +150,16 @@ def last_command(update: Update, context: CallbackContext):
     if last and isinstance(last, dict) and last.get("user1"):
         u1 = last["user1"]
         u2 = last["user2"]
-        date = last.get("date", "")
-        date_str = date[:10] if date else "نامشخص"
-        
-        msg = f"📅 **آخرین زوج ({date_str})**\n\n"
-        msg += f"👤 {u1['name']} (@{u1['username']})\n"
-        msg += f"❤️ با ❤️\n"
-        msg += f"👤 {u2['name']} (@{u2['username']})"
-        
-        update.message.reply_text(msg, parse_mode="Markdown")
+        date = last.get("date", "")[:10]
+        update.message.reply_text(
+            f"""📅 آخرین زوج ({date})
+
+👤 {u1['name']}
+یوزرنیم: @{u1['username']}
+❤️ با ❤️
+👤 {u2['name']}
+یوزرنیم: @{u2['username']}"""
+        )
     else:
         update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
 
@@ -163,12 +168,13 @@ def count_command(update: Update, context: CallbackContext):
     members = get_members(chat_id)
     blocked = get_blocked_users(chat_id)
     
-    msg = f"👥 **آمار اعضا:**\n\n"
-    msg += f"🔹 کل اعضا: {len(members)} نفر\n"
-    msg += f"🔹 اعضای قابل انتخاب: {len(members) - len(blocked)} نفر\n"
-    msg += f"🔹 در لیست سیاه: {len(blocked)} نفر (۷ روزه)"
-    
-    update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(
+        f"""👥 آمار اعضا:
+
+🔹 کل اعضا: {len(members)} نفر
+🔹 اعضای قابل انتخاب: {len(members) - len(blocked)} نفر
+🔹 در لیست سیاه: {len(blocked)} نفر (۷ روزه)"""
+    )
 
 def history_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -178,47 +184,44 @@ def history_command(update: Update, context: CallbackContext):
         update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
         return
     
-    msg = "📜 **تاریخچه ۱۰ زوج آخر:**\n\n"
+    msg = "📜 تاریخچه ۱۰ زوج آخر:\n\n"
     for i, couple in enumerate(reversed(history), 1):
         if isinstance(couple, dict) and "user1" in couple and "user2" in couple:
             u1 = couple["user1"]
             u2 = couple["user2"]
-            date = couple.get("date", "")
-            date_str = date[:10] if date else ""
-            msg += f"{i}. {u1['name']} ❤️ {u2['name']} ({date_str})\n"
+            date = couple.get("date", "")[:10]
+            msg += f"{i}. {u1['name']} ❤️ {u2['name']} ({date})\n"
     
-    update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg)
 
 def stats_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     stats = get_stats(chat_id)
     
-    msg = f"📊 **آمار گروه:**\n\n"
-    msg += f"👥 تعداد اعضا: {stats['total_members']} نفر\n"
-    msg += f"💞 تعداد زوج‌ها: {stats['total_couples']} بار\n"
-    msg += f"🌟 کاربران منحصر‌به‌فرد: {stats['unique_users']} نفر\n"
+    msg = f"""📊 آمار گروه:
+
+👥 تعداد اعضا: {stats['total_members']} نفر
+💞 تعداد زوج‌ها: {stats['total_couples']} بار
+🌟 کاربران منحصر‌به‌فرد: {stats['unique_users']} نفر"""
     
     if stats['last_couple'] and isinstance(stats['last_couple'], dict):
         u1 = stats['last_couple'].get('user1', {})
         u2 = stats['last_couple'].get('user2', {})
-        msg += f"\n💖 آخرین زوج:\n"
-        msg += f"👤 {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')}"
+        msg += f"\n\n💖 آخرین زوج:\n👤 {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')}"
     
-    update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg)
 
 def reset_command(update: Update, context: CallbackContext):
     clear_data()
     update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
-# ==================== اجرای اصلی ====================
+# ==================== اجرا ====================
 def main():
-    # اجرای Flask
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
-    # اجرای ربات
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
@@ -232,7 +235,7 @@ def main():
     dp.add_handler(CommandHandler("reset", reset_command))
     
     logger.info("🚀 ربات شروع به کار کرد...")
-    updater.start_polling(drop_pending_updates=True)
+    updater.start_polling()
     updater.idle()
 
 if __name__ == "__main__":
