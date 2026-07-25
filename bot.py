@@ -1,6 +1,5 @@
 import logging
 import random
-import asyncio
 from datetime import timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 GROUP_ID = config.GROUP_ID
 
 async def update_members():
-    """به‌روزرسانی لیست اعضا با Telethon (اصلاح شده)"""
+    """به‌روزرسانی لیست اعضا با Telethon"""
     try:
         members = await get_all_members()
         return members
@@ -124,6 +123,7 @@ def main():
     application.add_handler(CommandHandler("last", last_command))
     application.add_handler(CommandHandler("count", count_command))
     
+    # بررسی JobQueue
     job_queue = application.job_queue
     if job_queue:
         job_queue.run_repeating(
@@ -133,6 +133,8 @@ def main():
             chat_id=GROUP_ID
         )
         logger.info("✅ کار روزانه تنظیم شد.")
+    else:
+        logger.warning("⚠️ JobQueue در دسترس نیست! زمان‌بندی خودکار فعال نمی‌شود.")
     
     logger.info("🚀 ربات شروع به کار کرد...")
     application.run_polling()
