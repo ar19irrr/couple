@@ -2,15 +2,14 @@ from telethon import TelegramClient
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
-from database import set_members
 
-async def get_all_members():
-    """دریافت همه اعضای گروه با Telethon (اصلاح شده)"""
+async def get_all_members(chat_id):
+    """دریافت همه اعضای یک گروه با Telethon"""
     try:
         client = TelegramClient('session', config.API_ID, config.API_HASH)
         await client.start()
         
-        entity = await client.get_entity(config.GROUP_ID)
+        entity = await client.get_entity(chat_id)
         
         members = []
         offset = 0
@@ -40,11 +39,9 @@ async def get_all_members():
             if len(participants.users) < limit:
                 break
         
-        set_members(members)
-        print(f"✅ {len(members)} عضو پیدا شد")
         await client.disconnect()
         return members
         
     except Exception as e:
-        print(f"❌ خطا: {e}")
+        print(f"❌ خطا در دریافت اعضا: {e}")
         return []
