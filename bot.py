@@ -1,12 +1,14 @@
 import logging
 import random
-from datetime import timedelta
+import asyncio
+from datetime import datetime, timedelta
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Updater, CommandHandler, CallbackContext
 import config
 from database import (
-    get_groups, add_group, remove_group,
-    get_members, set_members, save_couple, get_last_couple
+    get_members, set_members, save_couple, get_last_couple,
+    get_couple_history, get_blocked_users, clear_blocked_users,
+    get_stats, clear_data
 )
 from member_fetcher import get_all_members
 
@@ -16,202 +18,310 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def is_admin(update: Update):
+# ==================== پیام‌های متنوع ====================
+COUPLE_MESSAGES = [
+    "💞 **زوج جذاب امروز** 💞",
+    "🔥 **عشق امروز** 🔥",
+    "💖 **این دو تا عاشق شدن** 💖",
+    "🎯 **قرعه‌کشی امروز** 🎯",
+    "💘 **زوج منتخب امروز** 💘"
+]
+
+CELEBRATION_MESSAGES = [
+    "🎉 به این دو عزیز تبریک میگم! 🎉",
+    "😍 آفرین به این دو! 😍",
+    "🥳 قدماشون پر از برکت! 🥳",
+    "💐 تبریک به این دو قشنگ! 💐",
+    "🎊 این دو تا بهترینن! 🎊"
+]
+
+JOKE_MESSAGES = [
+    "بچه هاتون از سر کولتون بالا برن یا کوه 😄",
+    "اگه یکی مرد اونی یکی رو هم زنده زنده خاک کنید 😊🔥🎀",
+    "پایدار تا پای دار، باهم بمیرید زنده شوید 🫂",
+    "به پای هم پیر سیر دیر و عاشق باشید 🫂",
+    "دنیا رو به هم ببافید و عاشق باشید 🌍❤️"
+]
+
+# ==================== توابع کمکی ====================
+def is_admin(update):
+    """بررسی ادمین بودن کاربر (شامل مالک گروه)"""
     try:
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
-        admins = await update.get_bot().get_chat_administrators(chat_id)
-        for admin in admins:
-            if admin.user.id == user_id:
-                return True
+        
+        # دریافت اطلاعات کاربر در گروه
+        member = update.get_bot().get_chat_member(chat_id, user_id)
+        
+        # بررسی وضعیت کاربر (creator = مالک, administrator = ادمین)
+        if member.status in ['creator', 'administrator']:
+            return True
         return False
+        
     except Exception as e:
         logger.error(f"خطا در بررسی ادمین: {e}")
         return False
 
-async def update_members(chat_id):
+def update_members_sync(chat_id):
+    """به‌روزرسانی لیست اعضا"""
     try:
-        members = await get_all_members(chat_id)
-        if members:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        members = loop.run_until_complete(get_all_members(chat_id))
+        loop.close()
+        
+        if members and isinstance(members, list):
             set_members(chat_id, members)
-        return members
+            return members
+        return []
     except Exception as e:
-        logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}: {e}")
+        logger.error(f"❌ خطا در دریافت اعضا: {e}")
         return []
 
-async def select_couple(application, chat_id):
-    members = get_members(chat_id)
+# ==================== دستورات اصلی ====================
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        "🤖 **ربات زوج‌یاب حرفه‌ای**\n\n"
+        "📌 **دستورات عمومی:**\n"
+        "/start - این پیام\n"
+        "/couple - انتخاب زوج (فقط ادمین‌ها)\n"
+        "/count - تعداد اعضا\n"
+        "/last - آخرین زوج\n"
+        "/history - تاریخچه زوج‌ها\n"
+        "/stats - آمار گروه\n\n"
+        "⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد.",
+        parse_mode="Markdown"
+    )
+
+def couple_command(update: Update, context: CallbackContext):
+    """انتخاب زوج (فقط ادمین‌ها)"""
+    chat_id = update.effective_chat.id
     
-    if len(members) < 2:
-        await application.bot.send_message(
-            chat_id=chat_id,
-            text="❌ تعداد اعضا کافی نیست (حداقل ۲ نفر)"
+    # ایده ۳: محدودیت ادمین
+    if not is_admin(update):
+        update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
+        return
+    
+    update.message.reply_text("🔄 در حال انتخاب زوج...")
+    
+    # به‌روزرسانی لیست اعضا
+    members = update_members_sync(chat_id)
+    if not members:
+        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است و VPN روشن است.")
+        return
+    
+    # دریافت لیست سیاه
+    blocked = get_blocked_users(chat_id)
+    
+    # فیلتر کردن اعضای مسدود
+    available_members = [m for m in members if m["id"] not in blocked]
+    
+    if len(available_members) < 2:
+        update.message.reply_text(
+            "❌ تعداد اعضای قابل انتخاب کافی نیست (حداقل ۲ نفر).\n"
+            "⏳ ممکن است اعضا در لیست سیاه ۷ روزه باشند."
         )
         return
     
-    user1, user2 = random.sample(members, 2)
+    # انتخاب دو عضو متفاوت
+    user1, user2 = random.sample(available_members, 2)
+    
+    # ذخیره زوج
     save_couple(chat_id, user1, user2)
     
-    msg = (
-        f"💞 **زوج جذاب امروز** 💞\n\n"
-        f"به پای هم پیر سیر دیر و عاشق باشید 🫂\n"
-        f"پایدار تا پای دار \n"
-        f"باهم بمیرید زنده شوید \n"
-        f"اگه یکی مرد اونی یکی رو هم زنده زنده خاک کنید 😊🔥🎀\n\n"
-        f"👤 {user1['name']}\n"
-        f"یوزرنیم: @{user1['username']}\n"
-        f"❤️ با ❤️\n"
-        f"👤 {user2['name']}\n"
-        f"یوزرنیم: @{user2['username']}\n\n"
-        f"🎉 تبریک میگم بهتون! 🎉\n"
-        f"بچه هاتون از سر کولتون بالا برن یا کوه 😄"
-    )
+    # ایده ۴: پیام‌های متنوع
+    msg = random.choice(COUPLE_MESSAGES) + "\n\n"
+    msg += f"به پای هم پیر سیر دیر و عاشق باشید 🫂\n"
+    msg += f"پایدار تا پای دار \n"
+    msg += f"باهم بمیرید زنده شوید \n"
+    msg += f"{random.choice(JOKE_MESSAGES)}\n\n"
+    msg += f"👤 {user1['name']}\n"
+    msg += f"یوزرنیم: @{user1['username']}\n"
+    msg += f"❤️ با ❤️\n"
+    msg += f"👤 {user2['name']}\n"
+    msg += f"یوزرنیم: @{user2['username']}\n\n"
+    msg += random.choice(CELEBRATION_MESSAGES)
     
-    await application.bot.send_message(
-        chat_id=chat_id,
-        text=msg,
-        parse_mode="Markdown"
-    )
+    update.message.reply_text(msg, parse_mode="Markdown")
+    
+    # پاک کردن لیست سیاه منقضی شده
+    clear_blocked_users(chat_id)
     
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}: {user1['name']} و {user2['name']}")
 
-async def daily_job(context: ContextTypes.DEFAULT_TYPE):
-    # این تابع برای هر گروه به طور جداگانه اجرا می‌شود
-    chat_id = context.job.chat_id
-    application = context.application
-    
-    logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
-    await update_members(chat_id)
-    await select_couple(application, chat_id)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🤖 **ربات زوج‌یاب**\n\n"
-        "برای فعال کردن ربات در این گروه، ادمین گروه باید دستور /addgroup را ارسال کند.\n\n"
-        "📌 **دستورات ادمین:**\n"
-        "/addgroup - فعال کردن ربات در این گروه\n"
-        "/removegroup - غیرفعال کردن ربات در این گروه\n"
-        "/couple - انتخاب زوج (فقط ادمین‌ها)\n"
-        "/update - به‌روزرسانی لیست (فقط ادمین‌ها)\n\n"
-        "📌 **دستورات عمومی:**\n"
-        "/last - آخرین زوج\n"
-        "/count - تعداد اعضا",
-        parse_mode="Markdown"
-    )
-
-async def add_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     
-    if not await is_admin(update):
-        await update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند ربات را فعال کنند.")
+    if not is_admin(update):
+        update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
         return
     
-    if add_group(chat_id):
-        await update.message.reply_text("✅ ربات در این گروه فعال شد!")
-        # به‌روزرسانی اولیه اعضا
-        await update_members(chat_id)
-        
-        # تنظیم Job برای این گروه
-        job_queue = context.application.job_queue
-        if job_queue:
-            job_queue.run_repeating(
-                daily_job,
-                interval=86400,
-                first=10,
-                chat_id=chat_id
-            )
-            logger.info(f"✅ کار روزانه برای گروه {chat_id} تنظیم شد.")
+    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند ثانیه)")
+    
+    members = update_members_sync(chat_id)
+    if members and len(members) > 0:
+        update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
     else:
-        await update.message.reply_text("ℹ️ ربات قبلاً در این گروه فعال است.")
+        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است و VPN روشن است.")
 
-async def remove_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
-    
-    if not await is_admin(update):
-        await update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند ربات را غیرفعال کنند.")
-        return
-    
-    if remove_group(chat_id):
-        await update.message.reply_text("✅ ربات در این گروه غیرفعال شد!")
-        # حذف Jobهای این گروه
-        job_queue = context.application.job_queue
-        if job_queue:
-            jobs = job_queue.jobs()
-            for job in jobs:
-                if job.chat_id == chat_id:
-                    job.schedule_removal()
-    else:
-        await update.message.reply_text("ℹ️ ربات در این گروه فعال نیست.")
-
-async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    
-    if chat_id not in get_groups():
-        await update.message.reply_text("❌ ربات در این گروه فعال نیست. ادمین باید دستور /addgroup را بزند.")
-        return
-    
-    if not await is_admin(update):
-        await update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
-        return
-    
-    await update.message.reply_text("🔄 در حال انتخاب...")
-    await update_members(chat_id)
-    await select_couple(context.application, chat_id)
-
-async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    
-    if chat_id not in get_groups():
-        await update.message.reply_text("❌ ربات در این گروه فعال نیست. ادمین باید دستور /addgroup را بزند.")
-        return
-    
-    if not await is_admin(update):
-        await update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
-        return
-    
-    await update.message.reply_text("🔄 در حال به‌روزرسانی...")
-    members = await update_members(chat_id)
-    await update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
-
-async def last_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    
-    if chat_id not in get_groups():
-        await update.message.reply_text("❌ ربات در این گروه فعال نیست.")
-        return
-    
     last = get_last_couple(chat_id)
-    if last and last.get("user1"):
+    
+    if last and isinstance(last, dict) and last.get("user1"):
         u1 = last["user1"]
         u2 = last["user2"]
-        msg = f"📅 آخرین زوج:\n\n👤 {u1['name']} (@{u1['username']})\n❤️ با\n👤 {u2['name']} (@{u2['username']})"
-        await update.message.reply_text(msg)
+        date = last.get("date", "")
+        date_str = date[:10] if date else "نامشخص"
+        
+        msg = f"📅 **آخرین زوج ({date_str})**\n\n"
+        msg += f"👤 {u1['name']} (@{u1['username']})\n"
+        msg += f"❤️ با ❤️\n"
+        msg += f"👤 {u2['name']} (@{u2['username']})"
+        
+        update.message.reply_text(msg, parse_mode="Markdown")
     else:
-        await update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
+        update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
 
-async def count_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def count_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
+    members = get_members(chat_id)
+    blocked = get_blocked_users(chat_id)
     
-    if chat_id not in get_groups():
-        await update.message.reply_text("❌ ربات در این گروه فعال نیست.")
+    msg = f"👥 **آمار اعضا:**\n\n"
+    msg += f"🔹 کل اعضا: {len(members)} نفر\n"
+    msg += f"🔹 اعضای قابل انتخاب: {len(members) - len(blocked)} نفر\n"
+    msg += f"🔹 در لیست سیاه: {len(blocked)} نفر (۷ روزه)"
+    
+    update.message.reply_text(msg, parse_mode="Markdown")
+
+def history_command(update: Update, context: CallbackContext):
+    """تاریخچه زوج‌ها"""
+    chat_id = update.effective_chat.id
+    history = get_couple_history(chat_id, 10)
+    
+    if not history:
+        update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
         return
     
-    members = get_members(chat_id)
-    await update.message.reply_text(f"👥 تعداد اعضا: {len(members)} نفر")
-
-def main():
-    application = Application.builder().token(config.BOT_TOKEN).build()
+    msg = "📜 **تاریخچه ۱۰ زوج آخر:**\n\n"
+    for i, couple in enumerate(reversed(history), 1):
+        if isinstance(couple, dict) and "user1" in couple and "user2" in couple:
+            u1 = couple["user1"]
+            u2 = couple["user2"]
+            date = couple.get("date", "")
+            date_str = date[:10] if date else ""
+            msg += f"{i}. {u1['name']} ❤️ {u2['name']} ({date_str})\n"
     
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("addgroup", add_group_command))
-    application.add_handler(CommandHandler("removegroup", remove_group_command))
-    application.add_handler(CommandHandler("couple", couple_command))
-    application.add_handler(CommandHandler("update", update_command))
-    application.add_handler(CommandHandler("last", last_command))
-    application.add_handler(CommandHandler("count", count_command))
+    update.message.reply_text(msg, parse_mode="Markdown")
+
+def stats_command(update: Update, context: CallbackContext):
+    """آمار و گزارش"""
+    chat_id = update.effective_chat.id
+    stats = get_stats(chat_id)
+    
+    msg = f"📊 **آمار گروه:**\n\n"
+    msg += f"👥 تعداد اعضا: {stats['total_members']} نفر\n"
+    msg += f"💞 تعداد زوج‌ها: {stats['total_couples']} بار\n"
+    msg += f"🌟 کاربران منحصر‌به‌فرد: {stats['unique_users']} نفر\n"
+    
+    if stats['last_couple'] and isinstance(stats['last_couple'], dict):
+        u1 = stats['last_couple'].get('user1', {})
+        u2 = stats['last_couple'].get('user2', {})
+        msg += f"\n💖 آخرین زوج:\n"
+        msg += f"👤 {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')}"
+    
+    update.message.reply_text(msg, parse_mode="Markdown")
+
+def reset_command(update: Update, context: CallbackContext):
+    """ریست دیتابیس (فقط ادمین)"""
+    if not is_admin(update):
+        update.message.reply_text("⛔ فقط ادمین‌ها می‌توانند از این دستور استفاده کنند.")
+        return
+    
+    clear_data()
+    update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
+
+def daily_job(context: CallbackContext):
+    """انتخاب خودکار روزانه (ایده ۲)"""
+    chat_id = context.job.context
+    bot = context.bot
+    
+    logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
+    
+    # به‌روزرسانی اعضا
+    members = update_members_sync(chat_id)
+    if not members:
+        logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}")
+        return
+    
+    # دریافت لیست سیاه
+    blocked = get_blocked_users(chat_id)
+    available_members = [m for m in members if m["id"] not in blocked]
+    
+    if len(available_members) < 2:
+        bot.send_message(
+            chat_id=chat_id,
+            text="❌ تعداد اعضای قابل انتخاب کافی نیست."
+        )
+        return
+    
+    # انتخاب زوج
+    user1, user2 = random.sample(available_members, 2)
+    save_couple(chat_id, user1, user2)
+    
+    # پیام
+    msg = random.choice(COUPLE_MESSAGES) + "\n\n"
+    msg += f"به پای هم پیر سیر دیر و عاشق باشید 🫂\n"
+    msg += f"پایدار تا پای دار \n"
+    msg += f"باهم بمیرید زنده شوید \n"
+    msg += f"{random.choice(JOKE_MESSAGES)}\n\n"
+    msg += f"👤 {user1['name']}\n"
+    msg += f"یوزرنیم: @{user1['username']}\n"
+    msg += f"❤️ با ❤️\n"
+    msg += f"👤 {user2['name']}\n"
+    msg += f"یوزرنیم: @{user2['username']}\n\n"
+    msg += random.choice(CELEBRATION_MESSAGES)
+    
+    bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
+    clear_blocked_users(chat_id)
+    
+    logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
+
+# ==================== اجرای اصلی ====================
+def main():
+    updater = Updater(token=config.BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
+    
+    # دستورات
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("couple", couple_command))
+    dp.add_handler(CommandHandler("update", update_command))
+    dp.add_handler(CommandHandler("last", last_command))
+    dp.add_handler(CommandHandler("count", count_command))
+    dp.add_handler(CommandHandler("history", history_command))
+    dp.add_handler(CommandHandler("stats", stats_command))
+    dp.add_handler(CommandHandler("reset", reset_command))
+    
+    # ایده ۲: انتخاب خودکار روزانه (هر ۲۴ ساعت)
+    job_queue = updater.job_queue
+    if job_queue:
+        # برای هر گروهی که ربات فعال است، یک job تنظیم می‌کنیم
+        # اینجا فقط برای گروه پیش‌فرض تنظیم میکنیم
+        # برای پویا کردن، باید در دیتابیس لیست گروه‌ها رو نگهداری کنیم
+        
+        # مثال: تنظیم برای یک گروه خاص (در صورت نیاز)
+        # job_queue.run_repeating(
+        #     daily_job,
+        #     interval=86400,
+        #     first=10,
+        #     context=config.GROUP_ID  # اگر GROUP_ID دارید
+        # )
+        pass
     
     logger.info("🚀 ربات شروع به کار کرد...")
-    application.run_polling()
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == "__main__":
     main()
