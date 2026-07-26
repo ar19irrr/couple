@@ -2,6 +2,7 @@ import logging
 import random
 import threading
 import asyncio
+import os
 from datetime import datetime
 from flask import Flask
 from telegram import Update
@@ -63,8 +64,17 @@ JOKE_MESSAGES = [
 
 # ==================== تابع دریافت اعضا با Telethon ====================
 def update_members_sync(chat_id):
-    """به‌روزرسانی لیست اعضا با Telethon (همگام)"""
+    """به‌روزرسانی لیست اعضا با Telethon"""
     try:
+        logger.info(f"🔄 شروع دریافت اعضا برای گروه {chat_id}")
+        
+        # بررسی فایل نشست
+        session_file = os.path.join(os.path.dirname(__file__), 'session.session')
+        if not os.path.exists(session_file):
+            logger.error(f"❌ فایل نشست در مسیر {session_file} پیدا نشد!")
+            return []
+        
+        # اجرای Telethon
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         members = loop.run_until_complete(get_all_members(chat_id))
@@ -72,10 +82,14 @@ def update_members_sync(chat_id):
         
         if members and isinstance(members, list) and len(members) > 0:
             set_members(chat_id, members)
+            logger.info(f"✅ {len(members)} عضو برای گروه {chat_id} ذخیره شد")
             return members
-        return []
+        else:
+            logger.warning(f"⚠️ هیچ عضوی برای گروه {chat_id} پیدا نشد")
+            return []
+            
     except Exception as e:
-        logger.error(f"❌ خطا در دریافت اعضا: {e}")
+        logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}: {e}")
         return []
 
 # ==================== دستورات ====================
@@ -91,29 +105,40 @@ def start(update: Update, context: CallbackContext):
 /last - آخرین زوج
 /history - تاریخچه زوج‌ها
 /stats - آمار گروه
+/reset - ریست دیتابیس
 
 ⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
     )
 
 def addgroup_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
+    logger.info(f"📌 تلاش برای افزودن گروه: {chat_id}")
+    
     if add_group(chat_id):
-        update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
+        update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد. در حال دریافت اعضا...")
+        
         members = update_members_sync(chat_id)
-        if members:
+        if members and len(members) > 0:
             update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
         else:
-            update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که VPN روشن است و ربات ادمین است.")
+            update.message.reply_text(
+                "❌ خطا در دریافت اعضا.\n"
+                "لطفاً موارد زیر را بررسی کنید:\n"
+                "1️⃣ VPN روشن است\n"
+                "2️⃣ ربات ادمین گروه است\n"
+                "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
+            )
     else:
-        update.message.reply_text("ℹ️ این گروه قبلاً اضافه شده است.")
+        chat_id_str = str(chat_id)
+        update.message.reply_text(f"ℹ️ این گروه قبلاً به لیست اضافه شده است. (ID: {chat_id_str})")
 
 def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال انتخاب زوج...")
     
     members = get_members(chat_id)
-    if not members:
-        update.message.reply_text("❌ لیست اعضا خالی است. ابتدا دستور /update را بزنید.")
+    if not members or len(members) == 0:
+        update.message.reply_text("❌ لیست اعضا خالی است. ابتدا دستور /addgroup و سپس /update را بزنید.")
         return
     
     blocked = get_blocked_users(chat_id)
@@ -121,7 +146,9 @@ def couple_command(update: Update, context: CallbackContext):
     
     if len(available_members) < 2:
         update.message.reply_text(
-            "❌ تعداد اعضای قابل انتخاب کافی نیست (حداقل ۲ نفر)."
+            "❌ تعداد اعضای قابل انتخاب کافی نیست (حداقل ۲ نفر).\n"
+            f"🔹 کل اعضا: {len(members)}\n"
+            f"🔹 در لیست سیاه: {len(blocked)}"
         )
         return
     
@@ -156,7 +183,13 @@ def update_command(update: Update, context: CallbackContext):
     if members and len(members) > 0:
         update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
     else:
-        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که VPN روشن است و ربات ادمین است.")
+        update.message.reply_text(
+            "❌ خطا در دریافت اعضا.\n"
+            "لطفاً موارد زیر را بررسی کنید:\n"
+            "1️⃣ VPN روشن است\n"
+            "2️⃣ ربات ادمین گروه است\n"
+            "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
+        )
 
 def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -228,7 +261,7 @@ def stats_command(update: Update, context: CallbackContext):
 
 def reset_command(update: Update, context: CallbackContext):
     clear_data()
-    update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
+    update.message.reply_text("✅ دیتابیس با موفقیت ریست شد. حالا می‌توانید دوباره /addgroup بزنید.")
 
 # ==================== کار روزانه ====================
 def daily_job(context: CallbackContext):
@@ -238,7 +271,7 @@ def daily_job(context: CallbackContext):
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
     
     members = update_members_sync(chat_id)
-    if not members:
+    if not members or len(members) == 0:
         logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}")
         bot.send_message(
             chat_id=chat_id,
@@ -252,7 +285,7 @@ def daily_job(context: CallbackContext):
     if len(available_members) < 2:
         bot.send_message(
             chat_id=chat_id,
-            text="❌ تعداد اعضای قابل انتخاب کافی نیست."
+            text=f"❌ تعداد اعضای قابل انتخاب کافی نیست. (کل: {len(members)}, لیست سیاه: {len(blocked)})"
         )
         return
     
@@ -302,10 +335,12 @@ def schedule_daily_jobs(dispatcher):
 
 # ==================== اجرا ====================
 def main():
+    # اجرای Flask
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
+    # اجرای ربات
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
