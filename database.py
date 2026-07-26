@@ -10,7 +10,7 @@ def load_data():
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if not isinstance(data, dict):
-                    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}}
+                    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": []}
                 if "members" not in data:
                     data["members"] = {}
                 if "last_couple" not in data:
@@ -19,10 +19,12 @@ def load_data():
                     data["history"] = {}
                 if "blocked" not in data:
                     data["blocked"] = {}
+                if "groups" not in data:
+                    data["groups"] = []
                 return data
         except:
-            return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}}
-    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}}
+            return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": []}
+    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": []}
 
 def save_data(data):
     try:
@@ -31,6 +33,28 @@ def save_data(data):
     except Exception as e:
         print(f"❌ خطا در ذخیره دیتابیس: {e}")
 
+# ==================== گروه‌ها ====================
+def get_groups():
+    data = load_data()
+    return data.get("groups", [])
+
+def add_group(chat_id):
+    data = load_data()
+    if chat_id not in data["groups"]:
+        data["groups"].append(chat_id)
+        save_data(data)
+        return True
+    return False
+
+def remove_group(chat_id):
+    data = load_data()
+    if chat_id in data["groups"]:
+        data["groups"].remove(chat_id)
+        save_data(data)
+        return True
+    return False
+
+# ==================== اعضا ====================
 def get_members(chat_id):
     data = load_data()
     members = data.get("members", {}).get(str(chat_id), [])
@@ -45,24 +69,22 @@ def set_members(chat_id, members_list):
     data["members"][str(chat_id)] = members_list
     save_data(data)
 
+# ==================== زوج‌ها ====================
 def save_couple(chat_id, user1, user2):
     data = load_data()
     chat_id_str = str(chat_id)
     
-    # ذخیره زوج فعلی
     data["last_couple"][chat_id_str] = {
         "user1": user1,
         "user2": user2,
         "date": datetime.now().isoformat()
     }
     
-    # ذخیره در تاریخچه
     if "history" not in data:
         data["history"] = {}
     if chat_id_str not in data["history"]:
         data["history"][chat_id_str] = []
     
-    # اضافه کردن به تاریخچه (حداکثر ۵۰ تا)
     data["history"][chat_id_str].append({
         "user1": user1,
         "user2": user2,
@@ -71,13 +93,12 @@ def save_couple(chat_id, user1, user2):
     if len(data["history"][chat_id_str]) > 50:
         data["history"][chat_id_str] = data["history"][chat_id_str][-50:]
     
-    # اضافه کردن به لیست سیاه (برای جلوگیری از تکرار به مدت ۷ روز)
+    # لیست سیاه
     if "blocked" not in data:
         data["blocked"] = {}
     if chat_id_str not in data["blocked"]:
         data["blocked"][chat_id_str] = []
     
-    # اضافه کردن هر دو کاربر به لیست سیاه
     blocked_until = (datetime.now() + timedelta(days=7)).isoformat()
     data["blocked"][chat_id_str].append({
         "user_id": user1["id"],
@@ -104,13 +125,13 @@ def get_couple_history(chat_id, limit=10):
         return history[-limit:] if history else []
     return []
 
+# ==================== لیست سیاه ====================
 def get_blocked_users(chat_id):
     data = load_data()
     blocked = data.get("blocked", {}).get(str(chat_id), [])
     if not isinstance(blocked, list):
         return []
     
-    # پاک کردن کاربرانی که زمانشون گذشته
     now = datetime.now()
     active_blocked = []
     for item in blocked:
@@ -124,7 +145,6 @@ def get_blocked_users(chat_id):
     return active_blocked
 
 def clear_blocked_users(chat_id):
-    """پاک کردن لیست سیاه بعد از ۷ روز"""
     data = load_data()
     chat_id_str = str(chat_id)
     if chat_id_str in data.get("blocked", {}):
@@ -141,17 +161,15 @@ def clear_blocked_users(chat_id):
         data["blocked"][chat_id_str] = new_blocked
         save_data(data)
 
+# ==================== آمار ====================
 def get_stats(chat_id):
-    """دریافت آمار گروه"""
     data = load_data()
     chat_id_str = str(chat_id)
     members = get_members(chat_id)
     history = data.get("history", {}).get(chat_id_str, [])
     
-    # محاسبه تعداد کل انتخاب‌ها
     total_couples = len(history) if isinstance(history, list) else 0
     
-    # محاسبه تعداد کاربران منحصر به فرد
     unique_users = set()
     if isinstance(history, list):
         for couple in history:
@@ -169,5 +187,5 @@ def get_stats(chat_id):
     }
 
 def clear_data():
-    save_data({"members": {}, "last_couple": {}, "history": {}, "blocked": {}})
+    save_data({"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": []})
     print("✅ دیتابیس پاک شد")
