@@ -1,8 +1,7 @@
 import logging
 import random
-import asyncio
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext
@@ -12,7 +11,6 @@ from database import (
     get_couple_history, get_blocked_users, clear_blocked_users,
     get_stats, clear_data, get_groups, add_group
 )
-from member_fetcher import get_all_members
 
 # ==================== Flask ====================
 app = Flask(__name__)
@@ -65,27 +63,50 @@ JOKE_MESSAGES = [
 def is_admin(update, context):
     return True
 
-def update_members_sync(chat_id):
-    """به‌روزرسانی لیست اعضا با استفاده از bot.get_chat_members"""
+def get_all_members_from_group(bot, chat_id):
+    """دریافت همه اعضای گروه با استفاده از get_chat_members"""
     try:
-        # اینجا از خود ربات برای دریافت اعضا استفاده میکنیم
-        # نیازی به Telethon نیست!
-        return []
+        members = []
+        offset = 0
+        limit = 200
+        
+        while True:
+            # دریافت لیست اعضا
+            chat_members = bot.get_chat_members(
+                chat_id=chat_id,
+                offset=offset,
+                limit=limit
+            )
+            
+            if not chat_members:
+                break
+                
+            for member in chat_members:
+                user = member.user
+                if not user.is_bot:
+                    members.append({
+                        "id": user.id,
+                        "name": user.full_name or "بدون نام",
+                        "username": user.username or "ندارد"
+                    })
+            
+            offset += limit
+            if len(chat_members) < limit:
+                break
+        
+        logger.info(f"✅ {len(members)} عضو پیدا شد")
+        return members
+        
     except Exception as e:
         logger.error(f"❌ خطا در دریافت اعضا: {e}")
         return []
 
-async def update_members_async(chat_id):
-    """به‌روزرسانی لیست اعضا با استفاده از get_all_members"""
-    try:
-        members = await get_all_members(chat_id)
-        if members and len(members) > 10:
-            set_members(chat_id, members)
-            return members
-        return []
-    except Exception as e:
-        logger.error(f"❌ خطا در دریافت اعضا: {e}")
-        return []
+def update_members(bot, chat_id):
+    """به‌روزرسانی لیست اعضا"""
+    members = get_all_members_from_group(bot, chat_id)
+    if members:
+        set_members(chat_id, members)
+    return members
 
 # ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
@@ -108,6 +129,8 @@ def addgroup_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     if add_group(chat_id):
         update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
+        # به‌روزرسانی اولیه اعضا
+        update_members(context.bot, chat_id)
     else:
         update.message.reply_text("ℹ️ این گروه قبلاً اضافه شده است.")
 
@@ -152,17 +175,15 @@ def couple_command(update: Update, context: CallbackContext):
     
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
-async def update_command(update: Update, context: CallbackContext):
+def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
-    await update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
+    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
     
-    members = await update_members_async(chat_id)
+    members = update_members(context.bot, chat_id)
     if members and len(members) > 0:
-        await update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
-        # ذخیره در دیتابیس
-        set_members(chat_id, members)
+        update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
     else:
-        await update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
+        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
 
 def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -243,13 +264,10 @@ def daily_job(context: CallbackContext):
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
     
-    members = get_members(chat_id)
+    # به‌روزرسانی لیست اعضا
+    members = update_members(bot, chat_id)
     if not members:
-        logger.error(f"❌ لیست اعضا برای گروه {chat_id} خالی است.")
-        bot.send_message(
-            chat_id=chat_id,
-            text="❌ لیست اعضا خالی است. لطفاً دستور /update را بزنید."
-        )
+        logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}")
         return
     
     blocked = get_blocked_users(chat_id)
@@ -308,11 +326,13 @@ def schedule_daily_jobs(dispatcher):
 
 # ==================== اجرا ====================
 def main():
+    # اجرای Flask
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
+    # اجرای ربات
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
