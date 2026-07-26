@@ -323,7 +323,7 @@ def main():
     schedule_daily_jobs(dp)
     
     logger.info("🚀 ربات شروع به کار کرد...")
-    updater.start_polling()
+    updater.start_polling(drop_pending_updates=True)
     updater.idle()
 
 if __name__ == "__main__":
