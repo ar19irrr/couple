@@ -114,6 +114,17 @@ def addgroup_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     logger.info(f"📌 تلاش برای افزودن گروه: {chat_id}")
     
+    # چک کردن اینکه ربات ادمین هست یا نه
+    try:
+        bot_member = context.bot.get_chat_member(chat_id, context.bot.id)
+        if bot_member.status not in ['administrator', 'creator']:
+            update.message.reply_text("❌ ربات ادمین گروه نیست! لطفاً ربات را ادمین کنید.")
+            return
+    except Exception as e:
+        logger.error(f"❌ خطا در بررسی ادمین: {e}")
+        update.message.reply_text("❌ خطا در بررسی دسترسی ربات. مطمئن شو ربات ادمین است.")
+        return
+    
     if add_group(chat_id):
         update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد. در حال دریافت اعضا...")
         
