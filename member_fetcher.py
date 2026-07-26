@@ -1,18 +1,19 @@
+import os
 import asyncio
 from telethon import TelegramClient, errors
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
 
+# مسیر فایل نشست
+SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
+
 async def get_all_members(chat_id):
-    """دریافت همه اعضای گروه با استفاده از get_chat_members"""
+    """دریافت همه اعضای یک گروه با Telethon"""
     try:
-        # اینجا از خود ربات برای دریافت اعضا استفاده میکنیم
-        # دیگه نیازی به Telethon نیست!
-        return []
-    except Exception as e:
-        print(f"❌ خطا: {e}")
-        return []
+        if not os.path.exists(SESSION_FILE):
+            print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
+            return []
             
         print(f"✅ فایل نشست در مسیر {SESSION_FILE} پیدا شد.")
         
@@ -21,7 +22,6 @@ async def get_all_members(chat_id):
         async with client:
             await client.start()
             
-            # دریافت اطلاعات گروه
             entity = await client.get_entity(chat_id)
             if entity is None:
                 print(f"❌ گروه با شناسه {chat_id} یافت نشد.")
@@ -29,22 +29,21 @@ async def get_all_members(chat_id):
 
             members = []
             offset = 0
-            limit = 100  # حداکثر ۱۰۰ در هر درخواست
+            limit = 100
             
             print(f"⏳ در حال دریافت اعضای گروه {chat_id}...")
             
             while True:
                 try:
-                    # دریافت اعضا با offset
                     participants = await asyncio.wait_for(
                         client(GetParticipantsRequest(
                             channel=entity,
-                            filter=ChannelParticipantsSearch(''),  # همه اعضا
+                            filter=ChannelParticipantsSearch(''),
                             offset=offset,
                             limit=limit,
                             hash=0
                         )),
-                        timeout=45  # زمان بیشتر برای گروه‌های بزرگ
+                        timeout=45
                     )
                     
                     if not participants or not participants.users:
