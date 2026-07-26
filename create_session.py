@@ -7,21 +7,16 @@ try:
     API_ID = config.API_ID
     API_HASH = config.API_HASH
 except:
-    # اگه config کار نکرد، خودت اینجا وارد کن
     API_ID = 2040
     API_HASH = "b18441a1ff607e10a989891a5462e627"
 
 async def main():
     print("🔑 در حال ساخت نشست...")
     
-    # ساخت کلاینت
     client = TelegramClient('session', API_ID, API_HASH)
     
     try:
-        # شروع به کار و درخواست ورود
         await client.start()
-        
-        # تایید موفقیت
         me = await client.get_me()
         print(f"✅ نشست با موفقیت ساخته شد!")
         print(f"👤 کاربر: {me.first_name} (ID: {me.id})")
