@@ -60,19 +60,20 @@ JOKE_MESSAGES = [
     "دنیا رو به هم ببافید و عاشق باشید 🌍❤️"
 ]
 
-# ==================== تابع دریافت اعضا (برای نسخه ۲۰.۸) ====================
-async def get_members_from_group(bot, chat_id):
-    """دریافت همه اعضای گروه با استفاده از get_chat_members (نسخه ۲۰.۸)"""
+# ==================== تابع دریافت اعضا (با استفاده از chat.get_members) ====================
+async def get_all_members_from_group(application, chat_id):
+    """دریافت همه اعضای گروه با استفاده از get_chat_members"""
     try:
         logger.info(f"🔄 در حال دریافت اعضای گروه {chat_id}...")
         members = []
         
-        # دریافت اعضا با استفاده از get_chat_members (نسخه ۲۰.۸)
-        try:
-            offset = 0
-            limit = 200
-            while True:
-                chat_members = await bot.get_chat_members(
+        # روش ۱: دریافت اعضا با offset
+        offset = 0
+        limit = 200
+        
+        while True:
+            try:
+                chat_members = await application.bot.get_chat_members(
                     chat_id=chat_id,
                     offset=offset,
                     limit=limit
@@ -91,14 +92,36 @@ async def get_members_from_group(bot, chat_id):
                         })
                 
                 offset += limit
+                logger.info(f"📊 تاکنون {len(members)} عضو دریافت شد...")
+                
                 if len(chat_members) < limit:
                     break
                     
-                logger.info(f"📊 تاکنون {len(members)} عضو دریافت شد...")
+            except Exception as e:
+                logger.error(f"❌ خطا در دریافت اعضا با offset: {e}")
+                break
+        
+        # اگه روش بالا کار نکرد، از روش جایگزین استفاده کن
+        if not members:
+            logger.info("🔄 تلاش با روش جایگزین...")
+            try:
+                # دریافت اطلاعات گروه
+                chat = await application.bot.get_chat(chat_id)
+                logger.info(f"📊 نام گروه: {chat.title}")
                 
-        except Exception as e:
-            logger.error(f"❌ خطا در دریافت اعضا: {e}")
-            return []
+                # دریافت ادمین‌ها
+                admins = await application.bot.get_chat_administrators(chat_id)
+                for admin in admins:
+                    user = admin.user
+                    if not user.is_bot:
+                        members.append({
+                            "id": user.id,
+                            "name": user.full_name or "بدون نام",
+                            "username": user.username or "ندارد"
+                        })
+                logger.info(f"📊 {len(members)} ادمین پیدا شد")
+            except Exception as e:
+                logger.error(f"❌ خطا در روش جایگزین: {e}")
         
         logger.info(f"✅ {len(members)} عضو پیدا شد")
         return members
@@ -107,9 +130,9 @@ async def get_members_from_group(bot, chat_id):
         logger.error(f"❌ خطای کلی در دریافت اعضا: {e}")
         return []
 
-async def update_members(bot, chat_id):
+async def update_members(application, chat_id):
     """به‌روزرسانی لیست اعضا و ذخیره در دیتابیس"""
-    members = await get_members_from_group(bot, chat_id)
+    members = await get_all_members_from_group(application, chat_id)
     if members:
         set_members(chat_id, members)
         logger.info(f"✅ {len(members)} عضو در دیتابیس ذخیره شد")
@@ -136,7 +159,7 @@ async def addgroup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if add_group(chat_id):
         await update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
-        members = await update_members(context.bot, chat_id)
+        members = await update_members(context.application, chat_id)
         if members:
             await update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
         else:
@@ -189,7 +212,7 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     await update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
     
-    members = await update_members(context.bot, chat_id)
+    members = await update_members(context.application, chat_id)
     if members and len(members) > 0:
         await update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
     else:
@@ -270,11 +293,11 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==================== کار روزانه ====================
 async def daily_job(context: ContextTypes.DEFAULT_TYPE):
     chat_id = context.job.chat_id
-    bot = context.bot
+    application = context.application
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
     
-    members = await update_members(bot, chat_id)
+    members = await update_members(application, chat_id)
     if not members:
         logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}")
         return
@@ -283,7 +306,7 @@ async def daily_job(context: ContextTypes.DEFAULT_TYPE):
     available_members = [m for m in members if m["id"] not in blocked]
     
     if len(available_members) < 2:
-        await bot.send_message(
+        await application.bot.send_message(
             chat_id=chat_id,
             text="❌ تعداد اعضای قابل انتخاب کافی نیست."
         )
@@ -307,7 +330,7 @@ async def daily_job(context: ContextTypes.DEFAULT_TYPE):
 
 {random.choice(CELEBRATION_MESSAGES)}"""
     
-    await bot.send_message(chat_id=chat_id, text=msg)
+    await application.bot.send_message(chat_id=chat_id, text=msg)
     clear_blocked_users(chat_id)
     
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
