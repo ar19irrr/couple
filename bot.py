@@ -62,7 +62,7 @@ JOKE_MESSAGES = [
     "دنیا رو به هم ببافید و عاشق باشید 🌍❤️"
 ]
 
-# ==================== تابع دریافت اعضا با Telethon ====================
+# ==================== تابع دریافت اعضا با Telethon (نسخه دیباگ) ====================
 def update_members_sync(chat_id):
     """به‌روزرسانی لیست اعضا با Telethon"""
     try:
@@ -73,6 +73,8 @@ def update_members_sync(chat_id):
         if not os.path.exists(session_file):
             logger.error(f"❌ فایل نشست در مسیر {session_file} پیدا نشد!")
             return []
+        
+        logger.info(f"✅ فایل نشست در مسیر {session_file} پیدا شد.")
         
         # اجرای Telethon
         loop = asyncio.new_event_loop()
@@ -114,17 +116,27 @@ def addgroup_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     logger.info(f"📌 تلاش برای افزودن گروه: {chat_id}")
     
-    # چک کردن اینکه ربات ادمین هست یا نه
+    # ====== چک کردن اینکه ربات ادمین هست یا نه ======
     try:
         bot_member = context.bot.get_chat_member(chat_id, context.bot.id)
+        logger.info(f"📊 وضعیت ربات در گروه: {bot_member.status}")
+        
         if bot_member.status not in ['administrator', 'creator']:
-            update.message.reply_text("❌ ربات ادمین گروه نیست! لطفاً ربات را ادمین کنید.")
+            update.message.reply_text(
+                "❌ ربات ادمین گروه نیست!\n"
+                "لطفاً مراحل زیر را انجام دهید:\n"
+                "1️⃣ روی اسم ربات در گروه کلیک کنید\n"
+                "2️⃣ گزینه Make Admin را بزنید\n"
+                "3️⃣ تمام دسترسی‌ها را فعال کنید\n"
+                "4️⃣ دوباره /addgroup را بزنید"
+            )
             return
     except Exception as e:
         logger.error(f"❌ خطا در بررسی ادمین: {e}")
         update.message.reply_text("❌ خطا در بررسی دسترسی ربات. مطمئن شو ربات ادمین است.")
         return
     
+    # ====== افزودن گروه به دیتابیس ======
     if add_group(chat_id):
         update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد. در حال دریافت اعضا...")
         
@@ -136,8 +148,9 @@ def addgroup_command(update: Update, context: CallbackContext):
                 "❌ خطا در دریافت اعضا.\n"
                 "لطفاً موارد زیر را بررسی کنید:\n"
                 "1️⃣ VPN روشن است\n"
-                "2️⃣ ربات ادمین گروه است\n"
-                "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
+                "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
+                "3️⃣ فایل session.session در گیت‌هاب وجود دارد\n"
+                "4️⃣ چند دقیقه صبر کنید و دوباره /update را بزنید"
             )
     else:
         chat_id_str = str(chat_id)
@@ -198,7 +211,7 @@ def update_command(update: Update, context: CallbackContext):
             "❌ خطا در دریافت اعضا.\n"
             "لطفاً موارد زیر را بررسی کنید:\n"
             "1️⃣ VPN روشن است\n"
-            "2️⃣ ربات ادمین گروه است\n"
+            "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
             "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
         )
 
