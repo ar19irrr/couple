@@ -65,20 +65,27 @@ JOKE_MESSAGES = [
 def is_admin(update, context):
     return True
 
-def update_members_sync(chat_id):
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        members = loop.run_until_complete(get_all_members(chat_id))
-        loop.close()
-        
-        if members and isinstance(members, list):
-            set_members(chat_id, members)
-            return members
-        return []
-    except Exception as e:
-        logger.error(f"❌ خطا در دریافت اعضا: {e}")
-        return []
+async def update_members_sync(chat_id):
+    """به‌روزرسانی لیست اعضا با ۳ بار تلاش برای گروه‌های بزرگ"""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            members = loop.run_until_complete(get_all_members(chat_id))
+            loop.close()
+            
+            if members and len(members) > 10:
+                set_members(chat_id, members)
+                return members
+            else:
+                logger.warning(f"⚠️ تعداد کم: {len(members)}، تلاش {attempt+1}/{max_retries}...")
+                await asyncio.sleep(2)
+        except Exception as e:
+            logger.error(f"❌ تلاش {attempt+1} ناموفق: {e}")
+            await asyncio.sleep(2)
+    
+    return []
 
 # ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
@@ -102,7 +109,8 @@ def addgroup_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     if add_group(chat_id):
         update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
-        update_members_sync(chat_id)
+        # به‌روزرسانی اولیه اعضا
+        asyncio.run_coroutine_threadsafe(update_members_sync(chat_id), asyncio.get_event_loop())
     else:
         update.message.reply_text("ℹ️ این گروه قبلاً اضافه شده است.")
 
@@ -110,9 +118,9 @@ def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال انتخاب زوج...")
     
-    members = update_members_sync(chat_id)
+    members = get_members(chat_id)
     if not members:
-        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
+        update.message.reply_text("❌ لیست اعضا خالی است. ابتدا دستور /update را بزنید.")
         return
     
     blocked = get_blocked_users(chat_id)
@@ -147,15 +155,15 @@ def couple_command(update: Update, context: CallbackContext):
     
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
-def update_command(update: Update, context: CallbackContext):
+async def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
-    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا...")
+    await update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (این کار چند لحظه طول میکشد)")
     
-    members = update_members_sync(chat_id)
+    members = await update_members_sync(chat_id)
     if members and len(members) > 0:
-        update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
+        await update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
     else:
-        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
+        await update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است و دوباره تلاش کن.")
 
 def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -236,9 +244,14 @@ def daily_job(context: CallbackContext):
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
     
-    members = update_members_sync(chat_id)
+    # دریافت لیست اعضا از دیتابیس
+    members = get_members(chat_id)
     if not members:
-        logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}")
+        logger.error(f"❌ لیست اعضا برای گروه {chat_id} خالی است.")
+        bot.send_message(
+            chat_id=chat_id,
+            text="❌ لیست اعضا خالی است. لطفاً دستور /update را بزنید."
+        )
         return
     
     blocked = get_blocked_users(chat_id)
