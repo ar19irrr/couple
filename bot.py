@@ -5,13 +5,14 @@ import asyncio
 from datetime import datetime
 from flask import Flask
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Updater, CommandHandler, CallbackContext
 import config
 from database import (
     get_members, set_members, save_couple, get_last_couple,
     get_couple_history, get_blocked_users, clear_blocked_users,
     get_stats, clear_data, get_groups, add_group
 )
+from member_fetcher import get_all_members
 
 # ==================== Flask ====================
 app = Flask(__name__)
@@ -60,49 +61,27 @@ JOKE_MESSAGES = [
     "دنیا رو به هم ببافید و عاشق باشید 🌍❤️"
 ]
 
-# ==================== تابع دریافت اعضا (فقط با get_chat_administrators) ====================
-async def get_members_from_group(application, chat_id):
-    """دریافت اعضای گروه با استفاده از get_chat_administrators"""
+# ==================== تابع دریافت اعضا با Telethon ====================
+def update_members_sync(chat_id):
+    """به‌روزرسانی لیست اعضا با Telethon (همگام)"""
     try:
-        logger.info(f"🔄 در حال دریافت ادمین‌های گروه {chat_id}...")
-        members = []
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        members = loop.run_until_complete(get_all_members(chat_id))
+        loop.close()
         
-        # دریافت ادمین‌ها
-        admins = await application.bot.get_chat_administrators(chat_id)
-        logger.info(f"📊 {len(admins)} ادمین پیدا شد")
-        
-        for admin in admins:
-            user = admin.user
-            if not user.is_bot:
-                members.append({
-                    "id": user.id,
-                    "name": user.full_name or "بدون نام",
-                    "username": user.username or "ندارد"
-                })
-        
-        # اگه تعداد ادمین‌ها کم بود، از روش جایگزین استفاده کن (دریافت لیست اعضای عادی)
-        # اینجا می‌تونی یه لیست از کاربران معروف رو به صورت دستی اضافه کنی
-        # یا از یه روش دیگه برای دریافت اعضا استفاده کنی
-        
-        logger.info(f"✅ {len(members)} عضو پیدا شد")
-        return members
-        
+        if members and isinstance(members, list) and len(members) > 0:
+            set_members(chat_id, members)
+            return members
+        return []
     except Exception as e:
         logger.error(f"❌ خطا در دریافت اعضا: {e}")
         return []
 
-async def update_members(application, chat_id):
-    """به‌روزرسانی لیست اعضا و ذخیره در دیتابیس"""
-    members = await get_members_from_group(application, chat_id)
-    if members:
-        set_members(chat_id, members)
-        logger.info(f"✅ {len(members)} عضو در دیتابیس ذخیره شد")
-    return members
-
 # ==================== دستورات ====================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        """🤖 ربات زوج‌یاب
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        """🤖 ربات زوج‌یاب حرفه‌ای
 
 📌 دستورات:
 /start - این پیام
@@ -113,35 +92,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /history - تاریخچه زوج‌ها
 /stats - آمار گروه
 
-⚠️ نکته: ربات باید ادمین باشد."""
+⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
     )
 
-async def addgroup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def addgroup_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     if add_group(chat_id):
-        await update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
-        members = await update_members(context.application, chat_id)
+        update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
+        members = update_members_sync(chat_id)
         if members:
-            await update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
+            update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
         else:
-            await update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
+            update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که VPN روشن است و ربات ادمین است.")
     else:
-        await update.message.reply_text("ℹ️ این گروه قبلاً اضافه شده است.")
+        update.message.reply_text("ℹ️ این گروه قبلاً اضافه شده است.")
 
-async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
-    await update.message.reply_text("🔄 در حال انتخاب زوج...")
+    update.message.reply_text("🔄 در حال انتخاب زوج...")
     
     members = get_members(chat_id)
     if not members:
-        await update.message.reply_text("❌ لیست اعضا خالی است. ابتدا دستور /update را بزنید.")
+        update.message.reply_text("❌ لیست اعضا خالی است. ابتدا دستور /update را بزنید.")
         return
     
     blocked = get_blocked_users(chat_id)
     available_members = [m for m in members if m["id"] not in blocked]
     
     if len(available_members) < 2:
-        await update.message.reply_text(
+        update.message.reply_text(
             "❌ تعداد اعضای قابل انتخاب کافی نیست (حداقل ۲ نفر)."
         )
         return
@@ -164,22 +143,22 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 {random.choice(CELEBRATION_MESSAGES)}"""
     
-    await update.message.reply_text(msg)
+    update.message.reply_text(msg)
     clear_blocked_users(chat_id)
     
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
-async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
-    await update.message.reply_text("🔄 در حال به‌روزرسانی لیست اعضا...")
+    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
     
-    members = await update_members(context.application, chat_id)
+    members = update_members_sync(chat_id)
     if members and len(members) > 0:
-        await update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
+        update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
     else:
-        await update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
+        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که VPN روشن است و ربات ادمین است.")
 
-async def last_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     last = get_last_couple(chat_id)
     
@@ -187,7 +166,7 @@ async def last_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u1 = last["user1"]
         u2 = last["user2"]
         date = last.get("date", "")[:10]
-        await update.message.reply_text(
+        update.message.reply_text(
             f"""📅 آخرین زوج ({date})
 
 👤 {u1['name']}
@@ -197,14 +176,14 @@ async def last_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 یوزرنیم: @{u2['username']}"""
         )
     else:
-        await update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
+        update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
 
-async def count_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def count_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     members = get_members(chat_id)
     blocked = get_blocked_users(chat_id)
     
-    await update.message.reply_text(
+    update.message.reply_text(
         f"""👥 آمار اعضا:
 
 🔹 کل اعضا: {len(members)} نفر
@@ -212,12 +191,12 @@ async def count_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🔹 در لیست سیاه: {len(blocked)} نفر (۷ روزه)"""
     )
 
-async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def history_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     history = get_couple_history(chat_id, 10)
     
     if not history:
-        await update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
+        update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
         return
     
     msg = "📜 تاریخچه ۱۰ زوج آخر:\n\n"
@@ -228,9 +207,9 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             date = couple.get("date", "")[:10]
             msg += f"{i}. {u1['name']} ❤️ {u2['name']} ({date})\n"
     
-    await update.message.reply_text(msg)
+    update.message.reply_text(msg)
 
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def stats_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     stats = get_stats(chat_id)
     
@@ -245,29 +224,33 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u2 = stats['last_couple'].get('user2', {})
         msg += f"\n\n💖 آخرین زوج:\n👤 {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')}"
     
-    await update.message.reply_text(msg)
+    update.message.reply_text(msg)
 
-async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def reset_command(update: Update, context: CallbackContext):
     clear_data()
-    await update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
+    update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
 # ==================== کار روزانه ====================
-async def daily_job(context: ContextTypes.DEFAULT_TYPE):
-    chat_id = context.job.chat_id
-    application = context.application
+def daily_job(context: CallbackContext):
+    chat_id = context.job.context
+    bot = context.bot
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
     
-    members = await update_members(application, chat_id)
+    members = update_members_sync(chat_id)
     if not members:
         logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}")
+        bot.send_message(
+            chat_id=chat_id,
+            text="❌ خطا در دریافت لیست اعضا. لطفاً دستور /update را بزنید."
+        )
         return
     
     blocked = get_blocked_users(chat_id)
     available_members = [m for m in members if m["id"] not in blocked]
     
     if len(available_members) < 2:
-        await application.bot.send_message(
+        bot.send_message(
             chat_id=chat_id,
             text="❌ تعداد اعضای قابل انتخاب کافی نیست."
         )
@@ -291,14 +274,14 @@ async def daily_job(context: ContextTypes.DEFAULT_TYPE):
 
 {random.choice(CELEBRATION_MESSAGES)}"""
     
-    await application.bot.send_message(chat_id=chat_id, text=msg)
+    bot.send_message(chat_id=chat_id, text=msg)
     clear_blocked_users(chat_id)
     
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
 
 # ==================== زمان‌بندی برای همه گروه‌ها ====================
-def schedule_daily_jobs(application):
-    job_queue = application.job_queue
+def schedule_daily_jobs(dispatcher):
+    job_queue = dispatcher.job_queue
     if not job_queue:
         logger.warning("⚠️ JobQueue در دسترس نیست!")
         return
@@ -313,32 +296,34 @@ def schedule_daily_jobs(application):
             daily_job,
             interval=86400,
             first=10,
-            chat_id=chat_id
+            context=chat_id
         )
         logger.info(f"✅ کار روزانه برای گروه {chat_id} تنظیم شد.")
 
 # ==================== اجرا ====================
-async def main():
+def main():
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
-    application = Application.builder().token(config.BOT_TOKEN).build()
+    updater = Updater(token=config.BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
     
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("addgroup", addgroup_command))
-    application.add_handler(CommandHandler("couple", couple_command))
-    application.add_handler(CommandHandler("update", update_command))
-    application.add_handler(CommandHandler("last", last_command))
-    application.add_handler(CommandHandler("count", count_command))
-    application.add_handler(CommandHandler("history", history_command))
-    application.add_handler(CommandHandler("stats", stats_command))
-    application.add_handler(CommandHandler("reset", reset_command))
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("addgroup", addgroup_command))
+    dp.add_handler(CommandHandler("couple", couple_command))
+    dp.add_handler(CommandHandler("update", update_command))
+    dp.add_handler(CommandHandler("last", last_command))
+    dp.add_handler(CommandHandler("count", count_command))
+    dp.add_handler(CommandHandler("history", history_command))
+    dp.add_handler(CommandHandler("stats", stats_command))
+    dp.add_handler(CommandHandler("reset", reset_command))
     
-    schedule_daily_jobs(application)
+    schedule_daily_jobs(dp)
     
     logger.info("🚀 ربات شروع به کار کرد...")
-    await application.run_polling()
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
