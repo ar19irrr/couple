@@ -10,7 +10,7 @@ import config
 from database import (
     get_members, set_members, save_couple, get_last_couple,
     get_couple_history, get_blocked_users, clear_blocked_users,
-    get_stats, clear_data
+    get_stats, clear_data, get_groups, add_group
 )
 from member_fetcher import get_all_members
 
@@ -19,8 +19,12 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "OK", 200  # <--- فقط "OK" برگردون با کد وضعیت ۲۰۰
-    
+    return "ربات زوج‌یاب فعال است! 🚀"
+
+@app.route('/ping')
+def ping():
+    return "", 204
+
 def run_flask():
     port = 10000
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
@@ -59,7 +63,7 @@ JOKE_MESSAGES = [
 
 # ==================== توابع ====================
 def is_admin(update, context):
-    return True  # همه میتونن استفاده کنن
+    return True
 
 def update_members_sync(chat_id):
     try:
@@ -83,6 +87,7 @@ def start(update: Update, context: CallbackContext):
 
 📌 دستورات:
 /start - این پیام
+/addgroup - فعال کردن ربات در این گروه (فقط ادمین)
 /couple - انتخاب زوج
 /count - تعداد اعضا
 /last - آخرین زوج
@@ -91,6 +96,15 @@ def start(update: Update, context: CallbackContext):
 
 ⚠️ نکته: ربات باید ادمین باشد."""
     )
+
+def addgroup_command(update: Update, context: CallbackContext):
+    """افزودن گروه به لیست گروه‌های فعال"""
+    chat_id = update.effective_chat.id
+    if add_group(chat_id):
+        update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
+        update_members_sync(chat_id)
+    else:
+        update.message.reply_text("ℹ️ این گروه قبلاً اضافه شده است.")
 
 def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -215,17 +229,88 @@ def reset_command(update: Update, context: CallbackContext):
     clear_data()
     update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
+# ==================== کار روزانه ====================
+def daily_job(context: CallbackContext):
+    chat_id = context.job.context
+    bot = context.bot
+    
+    logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
+    
+    members = update_members_sync(chat_id)
+    if not members:
+        logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}")
+        return
+    
+    blocked = get_blocked_users(chat_id)
+    available_members = [m for m in members if m["id"] not in blocked]
+    
+    if len(available_members) < 2:
+        bot.send_message(
+            chat_id=chat_id,
+            text="❌ تعداد اعضای قابل انتخاب کافی نیست."
+        )
+        return
+    
+    user1, user2 = random.sample(available_members, 2)
+    save_couple(chat_id, user1, user2)
+    
+    msg = f"""{random.choice(COUPLE_MESSAGES)}
+
+به پای هم پیر سیر دیر و عاشق باشید 🫂
+پایدار تا پای دار 
+باهم بمیرید زنده شوید 
+{random.choice(JOKE_MESSAGES)}
+
+👤 {user1['name']}
+یوزرنیم: @{user1['username']}
+❤️ با ❤️
+👤 {user2['name']}
+یوزرنیم: @{user2['username']}
+
+{random.choice(CELEBRATION_MESSAGES)}"""
+    
+    bot.send_message(chat_id=chat_id, text=msg)
+    clear_blocked_users(chat_id)
+    
+    logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
+
+# ==================== زمان‌بندی برای همه گروه‌ها ====================
+def schedule_daily_jobs(dispatcher):
+    """تنظیم کار روزانه برای همه گروه‌های فعال"""
+    job_queue = dispatcher.job_queue
+    if not job_queue:
+        logger.warning("⚠️ JobQueue در دسترس نیست!")
+        return
+    
+    groups = get_groups()
+    
+    if not groups:
+        logger.info("ℹ️ هیچ گروه فعالی برای زمان‌بندی یافت نشد.")
+        return
+    
+    for chat_id in groups:
+        job_queue.run_repeating(
+            daily_job,
+            interval=86400,  # ۲۴ ساعت
+            first=10,
+            context=chat_id
+        )
+        logger.info(f"✅ کار روزانه برای گروه {chat_id} تنظیم شد.")
+
 # ==================== اجرا ====================
 def main():
+    # اجرای Flask
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
+    # اجرای ربات
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
     dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("addgroup", addgroup_command))
     dp.add_handler(CommandHandler("couple", couple_command))
     dp.add_handler(CommandHandler("update", update_command))
     dp.add_handler(CommandHandler("last", last_command))
@@ -233,6 +318,9 @@ def main():
     dp.add_handler(CommandHandler("history", history_command))
     dp.add_handler(CommandHandler("stats", stats_command))
     dp.add_handler(CommandHandler("reset", reset_command))
+    
+    # تنظیم کار روزانه برای همه گروه‌ها
+    schedule_daily_jobs(dp)
     
     logger.info("🚀 ربات شروع به کار کرد...")
     updater.start_polling()
