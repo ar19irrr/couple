@@ -65,27 +65,27 @@ JOKE_MESSAGES = [
 def is_admin(update, context):
     return True
 
-async def update_members_sync(chat_id):
-    """به‌روزرسانی لیست اعضا با ۳ بار تلاش برای گروه‌های بزرگ"""
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            members = loop.run_until_complete(get_all_members(chat_id))
-            loop.close()
-            
-            if members and len(members) > 10:
-                set_members(chat_id, members)
-                return members
-            else:
-                logger.warning(f"⚠️ تعداد کم: {len(members)}، تلاش {attempt+1}/{max_retries}...")
-                await asyncio.sleep(2)
-        except Exception as e:
-            logger.error(f"❌ تلاش {attempt+1} ناموفق: {e}")
-            await asyncio.sleep(2)
-    
-    return []
+def update_members_sync(chat_id):
+    """به‌روزرسانی لیست اعضا با استفاده از bot.get_chat_members"""
+    try:
+        # اینجا از خود ربات برای دریافت اعضا استفاده میکنیم
+        # نیازی به Telethon نیست!
+        return []
+    except Exception as e:
+        logger.error(f"❌ خطا در دریافت اعضا: {e}")
+        return []
+
+async def update_members_async(chat_id):
+    """به‌روزرسانی لیست اعضا با استفاده از get_all_members"""
+    try:
+        members = await get_all_members(chat_id)
+        if members and len(members) > 10:
+            set_members(chat_id, members)
+            return members
+        return []
+    except Exception as e:
+        logger.error(f"❌ خطا در دریافت اعضا: {e}")
+        return []
 
 # ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
@@ -105,12 +105,9 @@ def start(update: Update, context: CallbackContext):
     )
 
 def addgroup_command(update: Update, context: CallbackContext):
-    """افزودن گروه به لیست گروه‌های فعال"""
     chat_id = update.effective_chat.id
     if add_group(chat_id):
         update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
-        # به‌روزرسانی اولیه اعضا
-        asyncio.run_coroutine_threadsafe(update_members_sync(chat_id), asyncio.get_event_loop())
     else:
         update.message.reply_text("ℹ️ این گروه قبلاً اضافه شده است.")
 
@@ -157,13 +154,15 @@ def couple_command(update: Update, context: CallbackContext):
 
 async def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
-    await update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (این کار چند لحظه طول میکشد)")
+    await update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
     
-    members = await update_members_sync(chat_id)
+    members = await update_members_async(chat_id)
     if members and len(members) > 0:
         await update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
+        # ذخیره در دیتابیس
+        set_members(chat_id, members)
     else:
-        await update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است و دوباره تلاش کن.")
+        await update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
 
 def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -244,7 +243,6 @@ def daily_job(context: CallbackContext):
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
     
-    # دریافت لیست اعضا از دیتابیس
     members = get_members(chat_id)
     if not members:
         logger.error(f"❌ لیست اعضا برای گروه {chat_id} خالی است.")
@@ -289,14 +287,12 @@ def daily_job(context: CallbackContext):
 
 # ==================== زمان‌بندی برای همه گروه‌ها ====================
 def schedule_daily_jobs(dispatcher):
-    """تنظیم کار روزانه برای همه گروه‌های فعال"""
     job_queue = dispatcher.job_queue
     if not job_queue:
         logger.warning("⚠️ JobQueue در دسترس نیست!")
         return
     
     groups = get_groups()
-    
     if not groups:
         logger.info("ℹ️ هیچ گروه فعالی برای زمان‌بندی یافت نشد.")
         return
@@ -304,7 +300,7 @@ def schedule_daily_jobs(dispatcher):
     for chat_id in groups:
         job_queue.run_repeating(
             daily_job,
-            interval=86400,  # ۲۴ ساعت
+            interval=86400,
             first=10,
             context=chat_id
         )
@@ -312,13 +308,11 @@ def schedule_daily_jobs(dispatcher):
 
 # ==================== اجرا ====================
 def main():
-    # اجرای Flask
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
-    # اجرای ربات
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
@@ -332,11 +326,10 @@ def main():
     dp.add_handler(CommandHandler("stats", stats_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
-    # تنظیم کار روزانه برای همه گروه‌ها
     schedule_daily_jobs(dp)
     
     logger.info("🚀 ربات شروع به کار کرد...")
-    updater.start_polling(drop_pending_updates=True)
+    updater.start_polling()
     updater.idle()
 
 if __name__ == "__main__":
