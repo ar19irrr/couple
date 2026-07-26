@@ -19,8 +19,8 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "ربات زوج‌یاب فعال است! 🚀"
-
+    return "OK", 200  # <--- فقط "OK" برگردون با کد وضعیت ۲۰۰
+    
 def run_flask():
     port = 10000
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
