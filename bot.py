@@ -59,13 +59,12 @@ JOKE_MESSAGES = [
     "دنیا رو به هم ببافید و عاشق باشید 🌍❤️"
 ]
 
-# ==================== توابع ====================
-def is_admin(update, context):
-    return True
-
+# ==================== تابع دریافت اعضا (ساده و مستقیم) ====================
 def get_all_members_from_group(bot, chat_id):
     """دریافت همه اعضای گروه با استفاده از get_chat_members"""
     try:
+        logger.info(f"🔄 در حال دریافت اعضای گروه {chat_id}...")
+        
         members = []
         offset = 0
         limit = 200
@@ -77,6 +76,8 @@ def get_all_members_from_group(bot, chat_id):
                 offset=offset,
                 limit=limit
             )
+            
+            logger.info(f"📊 {len(chat_members)} عضو در این مرحله دریافت شد")
             
             if not chat_members:
                 break
@@ -102,10 +103,11 @@ def get_all_members_from_group(bot, chat_id):
         return []
 
 def update_members(bot, chat_id):
-    """به‌روزرسانی لیست اعضا"""
+    """به‌روزرسانی لیست اعضا و ذخیره در دیتابیس"""
     members = get_all_members_from_group(bot, chat_id)
     if members:
         set_members(chat_id, members)
+        logger.info(f"✅ {len(members)} عضو در دیتابیس ذخیره شد")
     return members
 
 # ==================== دستورات ====================
@@ -115,7 +117,7 @@ def start(update: Update, context: CallbackContext):
 
 📌 دستورات:
 /start - این پیام
-/addgroup - فعال کردن ربات در این گروه (فقط ادمین)
+/addgroup - فعال کردن ربات در این گروه
 /couple - انتخاب زوج
 /count - تعداد اعضا
 /last - آخرین زوج
@@ -130,7 +132,11 @@ def addgroup_command(update: Update, context: CallbackContext):
     if add_group(chat_id):
         update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
         # به‌روزرسانی اولیه اعضا
-        update_members(context.bot, chat_id)
+        members = update_members(context.bot, chat_id)
+        if members:
+            update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
+        else:
+            update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
     else:
         update.message.reply_text("ℹ️ این گروه قبلاً اضافه شده است.")
 
@@ -177,11 +183,11 @@ def couple_command(update: Update, context: CallbackContext):
 
 def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
-    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
+    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا...")
     
     members = update_members(context.bot, chat_id)
     if members and len(members) > 0:
-        update.message.reply_text(f"✅ {len(members)} عضو پیدا شد.")
+        update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
     else:
         update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو که ربات ادمین است.")
 
