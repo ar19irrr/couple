@@ -1,15 +1,14 @@
 import os
 import asyncio
 from telethon import TelegramClient, errors
-from telethon.tl.functions.channels import GetParticipantsRequest, GetFullChannelRequest
+from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
 
-# مسیر فایل نشست
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
 async def get_all_members(chat_id):
-    """دریافت همه اعضای یک گروه با Telethon"""
+    """دریافت همه اعضای یک گروه با Telethon - نسخه مستقیم"""
     try:
         if not os.path.exists(SESSION_FILE):
             print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
@@ -22,29 +21,16 @@ async def get_all_members(chat_id):
         async with client:
             await client.start()
             
-            # ====== مرحله ۱: دریافت دیالوگ‌ها برای پر کردن کش ======
-            print("🔄 در حال دریافت دیالوگ‌ها برای شناسایی گروه...")
-            dialogs = await client.get_dialogs()
+            # ====== دریافت مستقیم گروه با chat_id ======
+            print(f"🔄 در حال دریافت گروه با شناسه {chat_id}...")
+            try:
+                entity = await client.get_entity(chat_id)
+                print(f"✅ گروه با شناسه {chat_id} پیدا شد.")
+            except Exception as e:
+                print(f"❌ خطا در دریافت گروه: {e}")
+                return []
             
-            # پیدا کردن گروه مورد نظر در دیالوگ‌ها
-            entity = None
-            for dialog in dialogs:
-                if dialog.is_group and dialog.id == chat_id:
-                    entity = dialog.entity
-                    print(f"✅ گروه {dialog.name} در دیالوگ‌ها پیدا شد.")
-                    break
-            
-            # اگه گروه در دیالوگ‌ها نبود، مستقیماً دریافتش کن
-            if entity is None:
-                print(f"⚠️ گروه {chat_id} در دیالوگ‌ها پیدا نشد. تلاش برای دریافت مستقیم...")
-                try:
-                    entity = await client.get_entity(chat_id)
-                    print(f"✅ گروه با شناسه {chat_id} پیدا شد.")
-                except Exception as e:
-                    print(f"❌ خطا در دریافت گروه: {e}")
-                    return []
-            
-            # ====== مرحله ۲: دریافت اعضا ======
+            # ====== دریافت اعضا ======
             members = []
             offset = 0
             limit = 100
