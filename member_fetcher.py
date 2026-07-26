@@ -8,66 +8,82 @@ import config
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
 async def get_all_members(chat_id):
+    """دریافت همه اعضای یک گروه با استفاده از offset و limit"""
     try:
+        # بررسی وجود فایل نشست
         if not os.path.exists(SESSION_FILE):
-            print(f"❌ فایل نشست پیدا نشد!")
+            print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
             return []
-
+            
+        print(f"✅ فایل نشست در مسیر {SESSION_FILE} پیدا شد.")
+        
         client = TelegramClient(SESSION_FILE, config.API_ID, config.API_HASH)
-        await client.start()
+        
+        async with client:
+            await client.start()
+            
+            # دریافت اطلاعات گروه
+            entity = await client.get_entity(chat_id)
+            if entity is None:
+                print(f"❌ گروه با شناسه {chat_id} یافت نشد.")
+                return []
 
-        # گرفتن entity گروه
-        entity = await client.get_entity(chat_id)
-        if entity is None:
-            print("❌ گروه پیدا نشد.")
-            return []
-
-        # دریافت تعداد کل اعضا
-        full_channel = await client.get_entity(chat_id)
-        total = full_channel.participants_count if hasattr(full_channel, 'participants_count') else "نامشخص"
-        print(f"📊 تعداد کل اعضا: {total}")
-
-        members = []
-        offset = 0
-        limit = 200  # حداکثر ۲۰۰ برای سرعت بیشتر
-
-        while True:
-            try:
-                participants = await client(GetParticipantsRequest(
-                    channel=entity,
-                    filter=ChannelParticipantsSearch(''),
-                    offset=offset,
-                    limit=limit,
-                    hash=0
-                ))
-
-                if not participants.users:
+            members = []
+            offset = 0
+            limit = 100  # حداکثر ۱۰۰ در هر درخواست
+            
+            print(f"⏳ در حال دریافت اعضای گروه {chat_id}...")
+            
+            while True:
+                try:
+                    # دریافت اعضا با offset
+                    participants = await asyncio.wait_for(
+                        client(GetParticipantsRequest(
+                            channel=entity,
+                            filter=ChannelParticipantsSearch(''),  # همه اعضا
+                            offset=offset,
+                            limit=limit,
+                            hash=0
+                        )),
+                        timeout=45  # زمان بیشتر برای گروه‌های بزرگ
+                    )
+                    
+                    if not participants or not participants.users:
+                        break
+                        
+                    for user in participants.users:
+                        if not user.bot:
+                            members.append({
+                                "id": user.id,
+                                "name": f"{user.first_name or ''} {user.last_name or ''}".strip() or "بدون نام",
+                                "username": user.username or "ندارد"
+                            })
+                    
+                    offset += limit
+                    print(f"📊 تاکنون {len(members)} عضو دریافت شد...")
+                    
+                    if len(participants.users) < limit:
+                        break
+                        
+                except asyncio.TimeoutError:
+                    print(f"⚠️ Timeout در دریافت اعضا برای گروه {chat_id}")
                     break
-
-                for user in participants.users:
-                    if not user.bot:
-                        members.append({
-                            "id": user.id,
-                            "name": f"{user.first_name or ''} {user.last_name or ''}".strip() or "بدون نام",
-                            "username": user.username or "ندارد"
-                        })
-
-                offset += limit
-                print(f"📊 تاکنون {len(members)} عضو دریافت شد...")
-
-                if len(participants.users) < limit:
+                except errors.FloodWaitError as e:
+                    print(f"⏳ محدودیت سرعت تلگرام. {e.seconds} ثانیه صبر کنید...")
+                    await asyncio.sleep(e.seconds + 1)
+                except Exception as e:
+                    print(f"❌ خطا در دریافت اعضا: {e}")
                     break
-
-            except errors.FloodWaitError as e:
-                print(f"⏳ صبر کن {e.seconds} ثانیه...")
-                await asyncio.sleep(e.seconds + 1)
-            except Exception as e:
-                print(f"⚠️ خطا: {e}")
-                break
-
-        print(f"✅ {len(members)} عضو پیدا شد.")
-        return members
-
+            
+            print(f"✅ {len(members)} عضو برای گروه {chat_id} پیدا شد.")
+            return members
+            
+    except errors.rpcerrorlist.ApiIdInvalidError:
+        print("❌ خطا: API_ID یا API_HASH نامعتبر است.")
+        return []
+    except FileNotFoundError:
+        print(f"❌ فایل نشست {SESSION_FILE} وجود ندارد!")
+        return []
     except Exception as e:
-        print(f"❌ خطا: {e}")
+        print(f"❌ خطای کلی در دریافت اعضا: {e}")
         return []
