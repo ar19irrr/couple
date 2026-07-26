@@ -1,7 +1,7 @@
 import os
 import asyncio
 from telethon import TelegramClient, errors
-from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.tl.functions.channels import GetParticipantsRequest, GetFullChannelRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
 
@@ -22,11 +22,29 @@ async def get_all_members(chat_id):
         async with client:
             await client.start()
             
-            entity = await client.get_entity(chat_id)
+            # ====== مرحله ۱: دریافت دیالوگ‌ها برای پر کردن کش ======
+            print("🔄 در حال دریافت دیالوگ‌ها برای شناسایی گروه...")
+            dialogs = await client.get_dialogs()
+            
+            # پیدا کردن گروه مورد نظر در دیالوگ‌ها
+            entity = None
+            for dialog in dialogs:
+                if dialog.is_group and dialog.id == chat_id:
+                    entity = dialog.entity
+                    print(f"✅ گروه {dialog.name} در دیالوگ‌ها پیدا شد.")
+                    break
+            
+            # اگه گروه در دیالوگ‌ها نبود، مستقیماً دریافتش کن
             if entity is None:
-                print(f"❌ گروه با شناسه {chat_id} یافت نشد.")
-                return []
-
+                print(f"⚠️ گروه {chat_id} در دیالوگ‌ها پیدا نشد. تلاش برای دریافت مستقیم...")
+                try:
+                    entity = await client.get_entity(chat_id)
+                    print(f"✅ گروه با شناسه {chat_id} پیدا شد.")
+                except Exception as e:
+                    print(f"❌ خطا در دریافت گروه: {e}")
+                    return []
+            
+            # ====== مرحله ۲: دریافت اعضا ======
             members = []
             offset = 0
             limit = 100
