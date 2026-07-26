@@ -9,19 +9,23 @@ import config
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
 async def get_all_members(chat_id):
-    """دریافت همه اعضای یک گروه با Telethon"""
+    """دریافت همه اعضای یک گروه با Telethon - نسخه پیشرفته برای گروه‌های بزرگ"""
     try:
+        # بررسی وجود فایل نشست
         if not os.path.exists(SESSION_FILE):
             print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
             return []
             
         print(f"✅ فایل نشست در مسیر {SESSION_FILE} پیدا شد.")
         
+        # ایجاد کلاینت
         client = TelegramClient(SESSION_FILE, config.API_ID, config.API_HASH)
         
         async with client:
+            # شروع به کار
             await client.start()
             
+            # دریافت اطلاعات گروه
             entity = await client.get_entity(chat_id)
             if entity is None:
                 print(f"❌ گروه با شناسه {chat_id} یافت نشد.")
@@ -29,19 +33,22 @@ async def get_all_members(chat_id):
 
             members = []
             offset = 0
-            limit = 100
+            limit = 100  # تعداد در هر درخواست (حداکثر ۱۰۰)
+            
+            print(f"⏳ در حال دریافت اعضای گروه {chat_id}...")
             
             while True:
                 try:
+                    # دریافت اعضا با offset
                     participants = await asyncio.wait_for(
                         client(GetParticipantsRequest(
                             channel=entity,
-                            filter=ChannelParticipantsSearch(''),
+                            filter=ChannelParticipantsSearch(''),  # '' یعنی همه اعضا
                             offset=offset,
                             limit=limit,
                             hash=0
                         )),
-                        timeout=30
+                        timeout=45  # افزایش زمان timeout برای گروه‌های بزرگ
                     )
                     
                     if not participants or not participants.users:
@@ -56,6 +63,8 @@ async def get_all_members(chat_id):
                             })
                     
                     offset += limit
+                    print(f"📊 تاکنون {len(members)} عضو دریافت شد...")
+                    
                     if len(participants.users) < limit:
                         break
                         
@@ -82,11 +91,15 @@ async def get_all_members(chat_id):
         print(f"❌ خطای کلی در دریافت اعضا: {e}")
         return []
 
-# تابع تست
+# تابع تست برای اجرای مستقل
 if __name__ == "__main__":
     async def test():
-        chat_id = -1001393393400  # آیدی گروه خودت رو بذار
+        # آیدی گروه خودت رو اینجا بذار
+        chat_id = -1001393393400
         members = await get_all_members(chat_id)
-        print(f"تعداد کل اعضا: {len(members)}")
+        print(f"\n📊 تعداد کل اعضا: {len(members)}")
+        print("\n📋 ۵ نفر اول:")
+        for i, m in enumerate(members[:5], 1):
+            print(f"  {i}. {m['name']} (@{m['username']})")
     
     asyncio.run(test())
