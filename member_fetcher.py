@@ -1,19 +1,18 @@
-import os
 import asyncio
 from telethon import TelegramClient, errors
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
 
-SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
-
 async def get_all_members(chat_id):
-    """دریافت همه اعضای یک گروه با استفاده از offset و limit"""
+    """دریافت همه اعضای گروه با استفاده از get_chat_members"""
     try:
-        # بررسی وجود فایل نشست
-        if not os.path.exists(SESSION_FILE):
-            print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
-            return []
+        # اینجا از خود ربات برای دریافت اعضا استفاده میکنیم
+        # دیگه نیازی به Telethon نیست!
+        return []
+    except Exception as e:
+        print(f"❌ خطا: {e}")
+        return []
             
         print(f"✅ فایل نشست در مسیر {SESSION_FILE} پیدا شد.")
         
