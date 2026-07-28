@@ -1,10 +1,9 @@
 import os
 import asyncio
 from telethon import TelegramClient, errors
-from telethon.tl.functions.channels import GetParticipantsRequest, GetFullChannelRequest
+from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
-import time
 
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
@@ -41,41 +40,33 @@ async def get_all_members(chat_id):
                 
                 # 🔑 لینک دعوت گروه جدید رو اینجا بذار
                 invite_link = "https://t.me/+SFfoan-FMMBmN2Y0"  # <--- عوض کن
-                invite_link = "https://t.me/+aBLglCWm77FkMjJk"
                 
                 print(f"🔄 تلاش برای دریافت گروه با لینک دعوت: {invite_link}")
                 try:
                     entity = await client.get_entity(invite_link)
                     print(f"✅ گروه با لینک دعوت پیدا شد.")
-                    
-                    # دریافت اطلاعات کامل گروه (برای access_hash)
-                    full_channel = await client(GetFullChannelRequest(entity))
-                    print(f"✅ اطلاعات کامل گروه دریافت شد.")
-                    
                 except Exception as e:
                     print(f"❌ خطا در دریافت گروه با لینک دعوت: {e}")
                     return []
             
-            # ====== مرحله ۳: دریافت اعضا (با استفاده از access_hash) ======
+            # ====== مرحله ۳: دریافت اعضا ======
             members = []
             offset = 0
-            limit = 200
+            limit = 100
             
-            print(f"⏳ در حال دریافت اعضای گروه... (ممکن است چند دقیقه طول بکشد)")
+            print(f"⏳ در حال دریافت اعضای گروه...")
             
             while True:
                 try:
-                    start_time = time.time()
-                    
                     participants = await asyncio.wait_for(
                         client(GetParticipantsRequest(
-                            channel=entity,  # اینجا entity شامل access_hash هست
+                            channel=entity,
                             filter=ChannelParticipantsSearch(''),
                             offset=offset,
                             limit=limit,
                             hash=0
                         )),
-                        timeout=60
+                        timeout=45
                     )
                     
                     if not participants or not participants.users:
@@ -90,21 +81,17 @@ async def get_all_members(chat_id):
                             })
                     
                     offset += limit
-                    elapsed = time.time() - start_time
-                    print(f"📊 {len(members)} عضو دریافت شد... (زمان: {elapsed:.1f}s)")
+                    print(f"📊 تاکنون {len(members)} عضو دریافت شد...")
                     
                     if len(participants.users) < limit:
                         break
-                    
-                    await asyncio.sleep(0.5)  # تاخیر هوشمند
                         
                 except asyncio.TimeoutError:
-                    print(f"⚠️ Timeout. تلاش مجدد...")
-                    continue
+                    print(f"⚠️ Timeout در دریافت اعضا")
+                    break
                 except errors.FloodWaitError as e:
-                    wait_time = e.seconds + 1
-                    print(f"⏳ محدودیت سرعت. {wait_time} ثانیه صبر کنید...")
-                    await asyncio.sleep(wait_time)
+                    print(f"⏳ محدودیت سرعت تلگرام. {e.seconds} ثانیه صبر کنید...")
+                    await asyncio.sleep(e.seconds + 1)
                 except Exception as e:
                     print(f"❌ خطا در دریافت اعضا: {e}")
                     break
