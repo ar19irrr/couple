@@ -22,8 +22,7 @@ def load_data():
                 if "groups" not in data:
                     data["groups"] = []
                 return data
-        except Exception as e:
-            print(f"⚠️ خطا در خواندن دیتابیس: {e}")
+        except:
             return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": []}
     return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": []}
 
@@ -75,8 +74,6 @@ def save_couple(chat_id, user1, user2):
     data = load_data()
     chat_id_str = str(chat_id)
     
-    if "last_couple" not in data:
-        data["last_couple"] = {}
     data["last_couple"][chat_id_str] = {
         "user1": user1,
         "user2": user2,
@@ -93,7 +90,6 @@ def save_couple(chat_id, user1, user2):
         "user2": user2,
         "date": datetime.now().isoformat()
     })
-    
     if len(data["history"][chat_id_str]) > 50:
         data["history"][chat_id_str] = data["history"][chat_id_str][-50:]
     
@@ -165,7 +161,7 @@ def clear_blocked_users(chat_id):
         data["blocked"][chat_id_str] = new_blocked
         save_data(data)
 
-# ==================== آمار ====================
+# ==================== آمار کلی گروه ====================
 def get_stats(chat_id):
     data = load_data()
     chat_id_str = str(chat_id)
@@ -190,52 +186,75 @@ def get_stats(chat_id):
         "last_couple": get_last_couple(chat_id)
     }
 
-# ==================== پرتکرارترین کاربران ====================
-def get_top_users(chat_id, top_n=3):
-    """دریافت پرتکرارترین کاربران در زوج‌ها"""
+# ==================== آمار شخصی کاربر ====================
+def get_user_couple_stats(chat_id, user_id):
+    """دریافت آمار زوج‌های یک کاربر خاص"""
     data = load_data()
     history = data.get("history", {}).get(str(chat_id), [])
     
     if not history:
         return []
     
-    # شمارش تعداد حضور هر کاربر
-    user_count = {}
+    # شمارش تعداد دفعاتی که کاربر با هر نفر دیگه لاور شده
+    couple_count = {}
     for couple in history:
-        if isinstance(couple, dict):
-            # کاربر اول
-            u1 = couple.get("user1")
-            if u1 and isinstance(u1, dict):
-                user_id = u1.get("id")
-                if user_id:
-                    user_count[user_id] = user_count.get(user_id, 0) + 1
+        if not isinstance(couple, dict):
+            continue
             
-            # کاربر دوم
-            u2 = couple.get("user2")
-            if u2 and isinstance(u2, dict):
-                user_id = u2.get("id")
-                if user_id:
-                    user_count[user_id] = user_count.get(user_id, 0) + 1
+        u1 = couple.get("user1")
+        u2 = couple.get("user2")
+        
+        # چک کردن اینکه کاربر در این زوج هست
+        if u1 and isinstance(u1, dict) and u1.get("id") == user_id:
+            partner = u2
+            if partner and isinstance(partner, dict):
+                partner_id = partner.get("id")
+                if partner_id:
+                    couple_count[partner_id] = couple_count.get(partner_id, 0) + 1
+                    
+        elif u2 and isinstance(u2, dict) and u2.get("id") == user_id:
+            partner = u1
+            if partner and isinstance(partner, dict):
+                partner_id = partner.get("id")
+                if partner_id:
+                    couple_count[partner_id] = couple_count.get(partner_id, 0) + 1
     
-    # دریافت اطلاعات کامل کاربران
+    # دریافت اطلاعات کامل شرکا
     members = get_members(chat_id)
     user_map = {m["id"]: m for m in members}
     
     # تبدیل به لیست و مرتب‌سازی
-    top_users = []
-    for user_id, count in user_count.items():
-        user_info = user_map.get(user_id, {"name": f"کاربر ناشناس {user_id}", "username": "ندارد"})
-        top_users.append({
-            "id": user_id,
-            "name": user_info.get("name", "بدون نام"),
-            "username": user_info.get("username", "ندارد"),
+    result = []
+    for partner_id, count in couple_count.items():
+        partner_info = user_map.get(partner_id, {"name": f"کاربر ناشناس", "username": "ندارد"})
+        result.append({
+            "id": partner_id,
+            "name": partner_info.get("name", "بدون نام"),
+            "username": partner_info.get("username", "ندارد"),
             "count": count
         })
     
     # مرتب‌سازی بر اساس تعداد (بیشترین اول)
-    top_users.sort(key=lambda x: x["count"], reverse=True)
+    result.sort(key=lambda x: x["count"], reverse=True)
     
-    return top_users[:top_n]
+    return result
+
+def get_user_total_couples(chat_id, user_id):
+    """تعداد کل زوج‌هایی که کاربر در آنها شرکت داشته"""
+    data = load_data()
+    history = data.get("history", {}).get(str(chat_id), [])
+    
+    total = 0
+    for couple in history:
+        if not isinstance(couple, dict):
+            continue
+        u1 = couple.get("user1")
+        u2 = couple.get("user2")
+        if (u1 and isinstance(u1, dict) and u1.get("id") == user_id) or \
+           (u2 and isinstance(u2, dict) and u2.get("id") == user_id):
+            total += 1
+    
+    return total
 
 # ==================== ریست ====================
 def clear_data():
