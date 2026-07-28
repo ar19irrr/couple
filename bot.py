@@ -11,7 +11,8 @@ import config
 from database import (
     get_members, set_members, save_couple, get_last_couple,
     get_couple_history, get_blocked_users, clear_blocked_users,
-    get_stats, clear_data, get_groups, add_group, get_top_users
+    get_stats, clear_data, get_groups, add_group,
+    get_user_couple_stats, get_user_total_couples
 )
 from member_fetcher import get_all_members
 
@@ -101,6 +102,7 @@ def start(update: Update, context: CallbackContext):
 /last - آخرین زوج
 /history - تاریخچه زوج‌ها
 /stats - آمار گروه
+/mystats - آمار شخصی شما
 /reset - ریست دیتابیس
 
 ⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
@@ -250,11 +252,11 @@ def history_command(update: Update, context: CallbackContext):
     update.message.reply_text(msg)
 
 def stats_command(update: Update, context: CallbackContext):
+    """آمار کلی گروه"""
     chat_id = update.effective_chat.id
     stats = get_stats(chat_id)
-    top_users = get_top_users(chat_id, top_n=3)
     
-    msg = f"📊 آمار گروه:\n\n"
+    msg = f"📊 **آمار کلی گروه:**\n\n"
     msg += f"👥 تعداد اعضا: {stats['total_members']} نفر\n"
     msg += f"💞 تعداد زوج‌ها: {stats['total_couples']} بار\n"
     msg += f"🌟 کاربران منحصر‌به‌فرد: {stats['unique_users']} نفر\n"
@@ -264,17 +266,34 @@ def stats_command(update: Update, context: CallbackContext):
         u2 = stats['last_couple'].get('user2', {})
         msg += f"\n💖 آخرین زوج:\n👤 {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')}"
     
-    if top_users:
-        msg += f"\n\n🏆 پرتکرارترین کاربران:\n"
-        medals = ["🥇", "🥈", "🥉"]
-        for i, user in enumerate(top_users):
-            medal = medals[i] if i < len(medals) else f"{i+1}."
-            msg += f"{medal} {user['name']} (@{user['username']}) — {user['count']} بار\n"
-    else:
-        msg += f"\n\n📭 هنوز آمار کافی برای نمایش وجود ندارد."
+    update.message.reply_text(msg, parse_mode="Markdown")
+
+def mystats_command(update: Update, context: CallbackContext):
+    """نمایش آمار شخصی کاربر"""
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    user_name = update.effective_user.first_name or "کاربر"
     
-    # ارسال بدون Markdown
-    update.message.reply_text(msg)
+    # دریافت آمار کاربر
+    total_couples = get_user_total_couples(chat_id, user_id)
+    partner_stats = get_user_couple_stats(chat_id, user_id)
+    
+    msg = f"📊 **آمار شخصی {user_name}**\n\n"
+    msg += f"💞 تعداد کل لاورها: {total_couples} بار\n"
+    
+    if partner_stats:
+        msg += f"\n👥 **شریک‌های لاور:**\n"
+        medals = ["🥇", "🥈", "🥉"]
+        for i, partner in enumerate(partner_stats[:5]):  # فقط ۵ نفر اول
+            medal = medals[i] if i < len(medals) else f"{i+1}."
+            msg += f"{medal} {partner['name']} (@{partner['username']}) — {partner['count']} بار\n"
+        
+        if len(partner_stats) > 5:
+            msg += f"\nو {len(partner_stats) - 5} نفر دیگر..."
+    else:
+        msg += f"\n📭 هنوز با کسی لاور نشدی!"
+    
+    update.message.reply_text(msg, parse_mode="Markdown")
 
 def reset_command(update: Update, context: CallbackContext):
     clear_data()
@@ -352,6 +371,7 @@ def main():
     dp.add_handler(CommandHandler("count", count_command))
     dp.add_handler(CommandHandler("history", history_command))
     dp.add_handler(CommandHandler("stats", stats_command))
+    dp.add_handler(CommandHandler("mystats", mystats_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
     schedule_daily_jobs(dp)
