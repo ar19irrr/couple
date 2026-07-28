@@ -5,7 +5,7 @@ import asyncio
 import os
 from datetime import datetime
 from flask import Flask
-from telegram import Update  # <--- این خط مهمه
+from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext
 import config
 from database import (
@@ -254,7 +254,7 @@ def stats_command(update: Update, context: CallbackContext):
     stats = get_stats(chat_id)
     top_users = get_top_users(chat_id, top_n=3)
     
-    msg = f"📊 **آمار گروه:**\n\n"
+    msg = f"📊 آمار گروه:\n\n"
     msg += f"👥 تعداد اعضا: {stats['total_members']} نفر\n"
     msg += f"💞 تعداد زوج‌ها: {stats['total_couples']} بار\n"
     msg += f"🌟 کاربران منحصر‌به‌فرد: {stats['unique_users']} نفر\n"
@@ -265,7 +265,7 @@ def stats_command(update: Update, context: CallbackContext):
         msg += f"\n💖 آخرین زوج:\n👤 {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')}"
     
     if top_users:
-        msg += f"\n\n🏆 **پرتکرارترین کاربران:**\n"
+        msg += f"\n\n🏆 پرتکرارترین کاربران:\n"
         medals = ["🥇", "🥈", "🥉"]
         for i, user in enumerate(top_users):
             medal = medals[i] if i < len(medals) else f"{i+1}."
@@ -273,7 +273,8 @@ def stats_command(update: Update, context: CallbackContext):
     else:
         msg += f"\n\n📭 هنوز آمار کافی برای نمایش وجود ندارد."
     
-    update.message.reply_text(msg, parse_mode="Markdown")
+    # ارسال بدون Markdown
+    update.message.reply_text(msg)
 
 def reset_command(update: Update, context: CallbackContext):
     clear_data()
