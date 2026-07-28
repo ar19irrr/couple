@@ -40,6 +40,7 @@ async def get_all_members(chat_id):
                 
                 # 🔑 لینک دعوت گروه جدید رو اینجا بذار
                 invite_link = "https://t.me/+SFfoan-FMMBmN2Y0"  # <--- عوض کن
+                invite_link = "https://t.me/+aBLglCWm77FkMjJk"
                 
                 print(f"🔄 تلاش برای دریافت گروه با لینک دعوت: {invite_link}")
                 try:
