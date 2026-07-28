@@ -8,7 +8,7 @@ import config
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
 async def get_all_members(chat_id):
-    """دریافت همه اعضای یک گروه با Telethon - نسخه مستقیم"""
+    """دریافت همه اعضای یک گروه با Telethon - نسخه نهایی با لینک دعوت"""
     try:
         if not os.path.exists(SESSION_FILE):
             print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
@@ -21,21 +21,40 @@ async def get_all_members(chat_id):
         async with client:
             await client.start()
             
-            # ====== دریافت مستقیم گروه با chat_id ======
-            print(f"🔄 در حال دریافت گروه با شناسه {chat_id}...")
-            try:
-                entity = await client.get_entity(chat_id)
-                print(f"✅ گروه با شناسه {chat_id} پیدا شد.")
-            except Exception as e:
-                print(f"❌ خطا در دریافت گروه: {e}")
-                return []
+            # ====== مرحله ۱: دریافت دیالوگ‌ها ======
+            print("🔄 در حال دریافت دیالوگ‌ها...")
+            dialogs = await client.get_dialogs()
+            print(f"✅ {len(dialogs)} دیالوگ دریافت شد.")
             
-            # ====== دریافت اعضا ======
+            # پیدا کردن گروه در دیالوگ‌ها
+            entity = None
+            for dialog in dialogs:
+                if dialog.is_group and dialog.id == chat_id:
+                    entity = dialog.entity
+                    print(f"✅ گروه {dialog.name} در دیالوگ‌ها پیدا شد.")
+                    break
+            
+            # ====== مرحله ۲: اگر گروه در دیالوگ نبود، با لینک دعوت ======
+            if entity is None:
+                print(f"⚠️ گروه {chat_id} در دیالوگ‌ها پیدا نشد.")
+                
+                # 🔑 لینک دعوت گروه جدید رو اینجا بذار
+                invite_link = "https://t.me/+SFfoan-FMMBmN2Y0"  # <--- عوض کن
+                
+                print(f"🔄 تلاش برای دریافت گروه با لینک دعوت: {invite_link}")
+                try:
+                    entity = await client.get_entity(invite_link)
+                    print(f"✅ گروه با لینک دعوت پیدا شد.")
+                except Exception as e:
+                    print(f"❌ خطا در دریافت گروه با لینک دعوت: {e}")
+                    return []
+            
+            # ====== مرحله ۳: دریافت اعضا ======
             members = []
             offset = 0
             limit = 100
             
-            print(f"⏳ در حال دریافت اعضای گروه {chat_id}...")
+            print(f"⏳ در حال دریافت اعضای گروه...")
             
             while True:
                 try:
@@ -68,7 +87,7 @@ async def get_all_members(chat_id):
                         break
                         
                 except asyncio.TimeoutError:
-                    print(f"⚠️ Timeout در دریافت اعضا برای گروه {chat_id}")
+                    print(f"⚠️ Timeout در دریافت اعضا")
                     break
                 except errors.FloodWaitError as e:
                     print(f"⏳ محدودیت سرعت تلگرام. {e.seconds} ثانیه صبر کنید...")
@@ -77,7 +96,7 @@ async def get_all_members(chat_id):
                     print(f"❌ خطا در دریافت اعضا: {e}")
                     break
             
-            print(f"✅ {len(members)} عضو برای گروه {chat_id} پیدا شد.")
+            print(f"✅ {len(members)} عضو پیدا شد.")
             return members
             
     except errors.rpcerrorlist.ApiIdInvalidError:
