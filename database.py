@@ -22,7 +22,8 @@ def load_data():
                 if "groups" not in data:
                     data["groups"] = []
                 return data
-        except:
+        except Exception as e:
+            print(f"⚠️ خطا در خواندن دیتابیس: {e}")
             return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": []}
     return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": []}
 
@@ -74,6 +75,8 @@ def save_couple(chat_id, user1, user2):
     data = load_data()
     chat_id_str = str(chat_id)
     
+    if "last_couple" not in data:
+        data["last_couple"] = {}
     data["last_couple"][chat_id_str] = {
         "user1": user1,
         "user2": user2,
@@ -90,6 +93,7 @@ def save_couple(chat_id, user1, user2):
         "user2": user2,
         "date": datetime.now().isoformat()
     })
+    
     if len(data["history"][chat_id_str]) > 50:
         data["history"][chat_id_str] = data["history"][chat_id_str][-50:]
     
