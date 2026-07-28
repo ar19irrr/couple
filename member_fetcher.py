@@ -1,7 +1,7 @@
 import os
 import asyncio
 from telethon import TelegramClient, errors
-from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.tl.functions.channels import GetParticipantsRequest, GetFullChannelRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
 import time
@@ -9,7 +9,7 @@ import time
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
 async def get_all_members(chat_id):
-    """دریافت همه اعضای گروه با Telethon - بهینه برای گروه‌های بزرگ"""
+    """دریافت همه اعضای یک گروه با Telethon - نسخه نهایی با لینک دعوت"""
     try:
         if not os.path.exists(SESSION_FILE):
             print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
@@ -39,33 +39,29 @@ async def get_all_members(chat_id):
             if entity is None:
                 print(f"⚠️ گروه {chat_id} در دیالوگ‌ها پیدا نشد.")
                 
-                # لینک دعوت گروه رو اینجا بذار
+                # 🔑 لینک دعوت گروه جدید رو اینجا بذار
                 invite_link = "https://t.me/+SFfoan-FMMBmN2Y0"  # <--- عوض کن
+                invite_link = "https://t.me/+aBLglCWm77FkMjJk"
                 
                 print(f"🔄 تلاش برای دریافت گروه با لینک دعوت: {invite_link}")
                 try:
                     entity = await client.get_entity(invite_link)
                     print(f"✅ گروه با لینک دعوت پیدا شد.")
+                    
+                    # دریافت اطلاعات کامل گروه (برای access_hash)
+                    full_channel = await client(GetFullChannelRequest(entity))
+                    print(f"✅ اطلاعات کامل گروه دریافت شد.")
+                    
                 except Exception as e:
                     print(f"❌ خطا در دریافت گروه با لینک دعوت: {e}")
                     return []
             
-            # ====== مرحله ۳: دریافت اعضا (بهینه برای گروه‌های بزرگ) ======
+            # ====== مرحله ۳: دریافت اعضا (با استفاده از access_hash) ======
             members = []
             offset = 0
-            limit = 200  # افزایش به ۲۰۰ برای سرعت بیشتر
-            total_members = 0
+            limit = 200
             
-            # دریافت تعداد کل اعضا
-            try:
-                full_channel = await client.get_entity(chat_id)
-                if hasattr(full_channel, 'participants_count'):
-                    total_members = full_channel.participants_count
-                    print(f"📊 تعداد کل اعضای گروه: {total_members}")
-            except:
-                total_members = None
-            
-            print(f"⏳ در حال دریافت اعضای گروه... (این کار ممکن است چند دقیقه طول بکشد)")
+            print(f"⏳ در حال دریافت اعضای گروه... (ممکن است چند دقیقه طول بکشد)")
             
             while True:
                 try:
@@ -73,13 +69,13 @@ async def get_all_members(chat_id):
                     
                     participants = await asyncio.wait_for(
                         client(GetParticipantsRequest(
-                            channel=entity,
+                            channel=entity,  # اینجا entity شامل access_hash هست
                             filter=ChannelParticipantsSearch(''),
                             offset=offset,
                             limit=limit,
                             hash=0
                         )),
-                        timeout=60  # افزایش timeout برای گروه‌های بزرگ
+                        timeout=60
                     )
                     
                     if not participants or not participants.users:
@@ -95,21 +91,19 @@ async def get_all_members(chat_id):
                     
                     offset += limit
                     elapsed = time.time() - start_time
-                    print(f"📊 {len(members)}/{total_members if total_members else '?'} عضو دریافت شد... (زمان: {elapsed:.1f}s)")
-                    
-                    # ====== تاخیر هوشمند برای جلوگیری از محدودیت ======
-                    if len(participants.users) == limit:
-                        await asyncio.sleep(0.5)  # تاخیر ۰.۵ ثانیه‌ای بین درخواست‌ها
+                    print(f"📊 {len(members)} عضو دریافت شد... (زمان: {elapsed:.1f}s)")
                     
                     if len(participants.users) < limit:
                         break
+                    
+                    await asyncio.sleep(0.5)  # تاخیر هوشمند
                         
                 except asyncio.TimeoutError:
-                    print(f"⚠️ Timeout در دریافت اعضا. تلاش مجدد...")
+                    print(f"⚠️ Timeout. تلاش مجدد...")
                     continue
                 except errors.FloodWaitError as e:
                     wait_time = e.seconds + 1
-                    print(f"⏳ محدودیت سرعت تلگرام. {wait_time} ثانیه صبر کنید...")
+                    print(f"⏳ محدودیت سرعت. {wait_time} ثانیه صبر کنید...")
                     await asyncio.sleep(wait_time)
                 except Exception as e:
                     print(f"❌ خطا در دریافت اعضا: {e}")
