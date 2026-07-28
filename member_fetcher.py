@@ -4,11 +4,12 @@ from telethon import TelegramClient, errors
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
+import time
 
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
 async def get_all_members(chat_id):
-    """دریافت همه اعضای یک گروه با Telethon - نسخه نهایی با لینک دعوت"""
+    """دریافت همه اعضای گروه با Telethon - بهینه برای گروه‌های بزرگ"""
     try:
         if not os.path.exists(SESSION_FILE):
             print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
@@ -38,7 +39,7 @@ async def get_all_members(chat_id):
             if entity is None:
                 print(f"⚠️ گروه {chat_id} در دیالوگ‌ها پیدا نشد.")
                 
-                # 🔑 لینک دعوت گروه جدید رو اینجا بذار
+                # لینک دعوت گروه رو اینجا بذار
                 invite_link = "https://t.me/+SFfoan-FMMBmN2Y0"  # <--- عوض کن
                 
                 print(f"🔄 تلاش برای دریافت گروه با لینک دعوت: {invite_link}")
@@ -49,15 +50,27 @@ async def get_all_members(chat_id):
                     print(f"❌ خطا در دریافت گروه با لینک دعوت: {e}")
                     return []
             
-            # ====== مرحله ۳: دریافت اعضا ======
+            # ====== مرحله ۳: دریافت اعضا (بهینه برای گروه‌های بزرگ) ======
             members = []
             offset = 0
-            limit = 100
+            limit = 200  # افزایش به ۲۰۰ برای سرعت بیشتر
+            total_members = 0
             
-            print(f"⏳ در حال دریافت اعضای گروه...")
+            # دریافت تعداد کل اعضا
+            try:
+                full_channel = await client.get_entity(chat_id)
+                if hasattr(full_channel, 'participants_count'):
+                    total_members = full_channel.participants_count
+                    print(f"📊 تعداد کل اعضای گروه: {total_members}")
+            except:
+                total_members = None
+            
+            print(f"⏳ در حال دریافت اعضای گروه... (این کار ممکن است چند دقیقه طول بکشد)")
             
             while True:
                 try:
+                    start_time = time.time()
+                    
                     participants = await asyncio.wait_for(
                         client(GetParticipantsRequest(
                             channel=entity,
@@ -66,7 +79,7 @@ async def get_all_members(chat_id):
                             limit=limit,
                             hash=0
                         )),
-                        timeout=45
+                        timeout=60  # افزایش timeout برای گروه‌های بزرگ
                     )
                     
                     if not participants or not participants.users:
@@ -81,17 +94,23 @@ async def get_all_members(chat_id):
                             })
                     
                     offset += limit
-                    print(f"📊 تاکنون {len(members)} عضو دریافت شد...")
+                    elapsed = time.time() - start_time
+                    print(f"📊 {len(members)}/{total_members if total_members else '?'} عضو دریافت شد... (زمان: {elapsed:.1f}s)")
+                    
+                    # ====== تاخیر هوشمند برای جلوگیری از محدودیت ======
+                    if len(participants.users) == limit:
+                        await asyncio.sleep(0.5)  # تاخیر ۰.۵ ثانیه‌ای بین درخواست‌ها
                     
                     if len(participants.users) < limit:
                         break
                         
                 except asyncio.TimeoutError:
-                    print(f"⚠️ Timeout در دریافت اعضا")
-                    break
+                    print(f"⚠️ Timeout در دریافت اعضا. تلاش مجدد...")
+                    continue
                 except errors.FloodWaitError as e:
-                    print(f"⏳ محدودیت سرعت تلگرام. {e.seconds} ثانیه صبر کنید...")
-                    await asyncio.sleep(e.seconds + 1)
+                    wait_time = e.seconds + 1
+                    print(f"⏳ محدودیت سرعت تلگرام. {wait_time} ثانیه صبر کنید...")
+                    await asyncio.sleep(wait_time)
                 except Exception as e:
                     print(f"❌ خطا در دریافت اعضا: {e}")
                     break
