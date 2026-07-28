@@ -6,7 +6,10 @@ import os
 from datetime import datetime
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
+from telegram.ext import (
+    Updater, CommandHandler, CallbackContext, CallbackQueryHandler,
+    MessageHandler, Filters  # <--- اینجا اضافه شد
+)
 import config
 from database import (
     get_members, set_members, save_couple, get_last_couple,
@@ -15,6 +18,7 @@ from database import (
     get_user_couple_stats, get_user_total_couples,
     set_user_gender, set_user_interest, get_user_profile
 )
+from member_fetcher import get_all_members
 
 # ==================== Flask ====================
 app = Flask(__name__)
@@ -128,7 +132,6 @@ def get_daily_fortune():
 
 # ==================== انتخاب بر اساس علایق (ایده ۹) ====================
 def match_by_interest(user1_profile, user2_profile):
-    """بررسی تطابق علایق دو کاربر"""
     interest1 = user1_profile.get("interest")
     interest2 = user2_profile.get("interest")
     
@@ -138,11 +141,9 @@ def match_by_interest(user1_profile, user2_profile):
 
 # ==================== انتخاب بر اساس جنسیت (ایده ۲) ====================
 def match_by_gender(user1_profile, user2_profile):
-    """بررسی تطابق جنسیت دو کاربر (مخالف‌ها)"""
     gender1 = user1_profile.get("gender")
     gender2 = user2_profile.get("gender")
     
-    # اگر هر دو جنسیت رو انتخاب کردن و مخالف هم باشن
     if gender1 and gender2:
         if gender1 == "male" and gender2 == "female":
             return True
@@ -157,8 +158,8 @@ def start(update: Update, context: CallbackContext):
 
 📌 دستورات:
 /start - این پیام
-/setgender - تنظیم جنسیت (ایده ۲)
-/setinterest - تنظیم علاقه (ایده ۹)
+/setgender - تنظیم جنسیت
+/setinterest - تنظیم علاقه
 /addgroup - فعال کردن ربات در این گروه
 /couple - انتخاب زوج
 /count - تعداد اعضا
@@ -169,23 +170,20 @@ def start(update: Update, context: CallbackContext):
 /reset - ریست دیتابیس
 
 ✨ امکانات ویژه:
-• انتخاب زوج بر اساس جنسیت (ایده ۲)
-• انتخاب زوج بر اساس علایق (ایده ۹)
-• فال روزانه (ایده ۱۷)
-• پاسخ‌های هوشمند با AI (ایده ۲۰)
+• انتخاب زوج بر اساس جنسیت
+• انتخاب زوج بر اساس علایق
+• فال روزانه
+• پاسخ‌های هوشمند
 
 ⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
     )
 
 # ==================== تنظیم جنسیت (ایده ۲) ====================
 def setgender_command(update: Update, context: CallbackContext):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-    
     keyboard = [
-        [InlineKeyboardButton("👨 مرد", callback_data=f"gender_male")],
-        [InlineKeyboardButton("👩 زن", callback_data=f"gender_female")],
-        [InlineKeyboardButton("🌈 سایر", callback_data=f"gender_other")],
+        [InlineKeyboardButton("👨 مرد", callback_data="gender_male")],
+        [InlineKeyboardButton("👩 زن", callback_data="gender_female")],
+        [InlineKeyboardButton("🌈 سایر", callback_data="gender_other")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -197,9 +195,6 @@ def setgender_command(update: Update, context: CallbackContext):
 
 # ==================== تنظیم علاقه (ایده ۹) ====================
 def setinterest_command(update: Update, context: CallbackContext):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-    
     keyboard = []
     for key, value in INTERESTS.items():
         keyboard.append([InlineKeyboardButton(
@@ -224,14 +219,12 @@ def button_callback(update: Update, context: CallbackContext):
     user_id = query.from_user.id
     data = query.data
     
-    # ===== تنظیم جنسیت =====
     if data.startswith("gender_"):
         gender = data.replace("gender_", "")
         set_user_gender(chat_id, user_id, gender)
         gender_label = GENDERS.get(gender, gender)
         query.edit_message_text(f"✅ جنسیت شما به {gender_label} تنظیم شد!")
     
-    # ===== تنظیم علاقه =====
     elif data.startswith("interest_"):
         interest = data.replace("interest_", "")
         set_user_interest(chat_id, user_id, interest)
@@ -250,17 +243,13 @@ def couple_command(update: Update, context: CallbackContext):
     
     blocked = get_blocked_users(chat_id)
     
-    # ===== فیلتر بر اساس جنسیت (ایده ۲) =====
-    # کاربری که دستور رو زده
     user_id = update.effective_user.id
     user_profile = get_user_profile(chat_id, user_id)
     user_gender = user_profile.get("gender")
     
-    # اگر کاربر جنسیت خودش رو انتخاب کرده بود، فقط مخالف‌ها رو نشون بده
     if user_gender:
         opposite_gender = "female" if user_gender == "male" else "male" if user_gender == "female" else None
         if opposite_gender:
-            # فیلتر کردن اعضا بر اساس جنسیت مخالف
             filtered_members = []
             for m in members:
                 if m["id"] in blocked:
@@ -272,10 +261,8 @@ def couple_command(update: Update, context: CallbackContext):
                     filtered_members.append(m)
             
             if len(filtered_members) >= 2:
-                # انتخاب از بین اعضای فیلتر شده
                 available_members = filtered_members
             else:
-                # اگه تعداد مخالف‌ها کم بود، از همه اعضا استفاده کن
                 available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
         else:
             available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
@@ -288,11 +275,9 @@ def couple_command(update: Update, context: CallbackContext):
         )
         return
     
-    # ===== انتخاب بر اساس علایق (ایده ۹) =====
     user_interest = user_profile.get("interest")
     
     if user_interest:
-        # پیدا کردن کاربرانی با علاقه مشترک
         interest_matched = []
         for m in available_members:
             profile = get_user_profile(chat_id, m["id"])
@@ -300,19 +285,15 @@ def couple_command(update: Update, context: CallbackContext):
                 interest_matched.append(m)
         
         if len(interest_matched) >= 2:
-            # انتخاب از بین افرادی که علاقه مشترک دارن
             selected = random.sample(interest_matched, 2)
         else:
-            # اگه تعدادشون کم بود، از همه انتخاب کن
             selected = random.sample(available_members, 2)
     else:
-        # انتخاب رندوم
         selected = random.sample(available_members, 2)
     
     user1, user2 = selected[0], selected[1]
     save_couple(chat_id, user1, user2)
     
-    # ===== فال روزانه (ایده ۱۷) =====
     fortune = get_daily_fortune()
     
     msg = f"""{random.choice(COUPLE_MESSAGES)}
@@ -487,7 +468,6 @@ def reset_command(update: Update, context: CallbackContext):
 
 # ==================== هوش مصنوعی (ایده ۲۰ - ساده) ====================
 def ai_response(text):
-    """تولید پاسخ هوشمند با استفاده از کلمات کلیدی"""
     text_lower = text.lower()
     
     if "عشق" in text_lower or "دوست" in text_lower:
@@ -510,7 +490,6 @@ def ai_response(text):
         return None
 
 def handle_ai_message(update: Update, context: CallbackContext):
-    """مدیریت پیام‌های هوشمند (ایده ۲۰)"""
     user_message = update.message.text
     chat_id = update.effective_chat.id
     
@@ -539,7 +518,6 @@ def daily_job(context: CallbackContext):
     user1, user2 = random.sample(available_members, 2)
     save_couple(chat_id, user1, user2)
     
-    # فال روزانه
     fortune = get_daily_fortune()
     
     msg = f"""{random.choice(COUPLE_MESSAGES)}
@@ -580,16 +558,13 @@ def schedule_daily_jobs(dispatcher):
 
 # ==================== اجرا ====================
 def main():
-    # اجرای Flask
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
-    # اجرای ربات
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
-    # دستورات
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("setgender", setgender_command))
     dp.add_handler(CommandHandler("setinterest", setinterest_command))
@@ -603,10 +578,7 @@ def main():
     dp.add_handler(CommandHandler("mystats", mystats_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
-    # Callback برای دکمه‌ها
     dp.add_handler(CallbackQueryHandler(button_callback))
-    
-    # AI Message Handler (ایده ۲۰)
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
     schedule_daily_jobs(dp)
