@@ -101,13 +101,11 @@ def set_user_interest(chat_id, user_id, interest):
 
 # ==================== امتیازات ماهانه ====================
 def get_monthly_score(chat_id, user_id):
-    """دریافت امتیاز ماهانه یک کاربر"""
     data = load_data()
     monthly = data.get("monthly_scores", {}).get(str(chat_id), {})
     return monthly.get(str(user_id), 0)
 
 def update_monthly_score(chat_id, user_id, points=1):
-    """افزایش امتیاز ماهانه کاربر"""
     data = load_data()
     chat_id_str = str(chat_id)
     user_id_str = str(user_id)
@@ -122,7 +120,6 @@ def update_monthly_score(chat_id, user_id, points=1):
     save_data(data)
 
 def reset_monthly_scores(chat_id):
-    """ریست کردن امتیازات ماهانه"""
     data = load_data()
     chat_id_str = str(chat_id)
     if "monthly_scores" in data and chat_id_str in data["monthly_scores"]:
@@ -130,7 +127,6 @@ def reset_monthly_scores(chat_id):
         save_data(data)
 
 def get_all_monthly_scores(chat_id):
-    """دریافت همه امتیازات ماهانه یک گروه"""
     data = load_data()
     return data.get("monthly_scores", {}).get(str(chat_id), {})
 
@@ -225,6 +221,25 @@ def clear_blocked_users(chat_id):
                     continue
         data["blocked"][chat_id_str] = new_blocked
         save_data(data)
+
+def check_and_reset_blocked(chat_id):
+    """بررسی و ریست لیست سیاه در صورت عدم وجود عضو قابل انتخاب"""
+    members = get_members(chat_id)
+    blocked = get_blocked_users(chat_id)
+    
+    # تعداد اعضای قابل انتخاب
+    available = [m for m in members if m["id"] not in blocked]
+    
+    # اگه تعداد قابل انتخاب کمتر از ۲ باشه و حداقل ۲ عضو وجود داشته باشه، لیست سیاه رو ریست کن
+    if len(available) < 2 and len(members) >= 2:
+        data = load_data()
+        chat_id_str = str(chat_id)
+        if chat_id_str in data.get("blocked", {}):
+            data["blocked"][chat_id_str] = []
+            save_data(data)
+            logger.info(f"✅ لیست سیاه برای گروه {chat_id} به دلیل اتمام اعضا ریست شد.")
+            return True
+    return False
 
 # ==================== آمار ====================
 def get_stats(chat_id):
