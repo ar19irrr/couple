@@ -10,7 +10,7 @@ def load_data():
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if not isinstance(data, dict):
-                    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}}
+                    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}, "global_blocked": []}
                 if "members" not in data:
                     data["members"] = {}
                 if "last_couple" not in data:
@@ -25,10 +25,12 @@ def load_data():
                     data["profiles"] = {}
                 if "monthly_scores" not in data:
                     data["monthly_scores"] = {}
+                if "global_blocked" not in data:
+                    data["global_blocked"] = []
                 return data
         except:
-            return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}}
-    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}}
+            return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}, "global_blocked": []}
+    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}, "global_blocked": []}
 
 def save_data(data):
     try:
@@ -277,6 +279,37 @@ def check_and_reset_blocked(chat_id):
             return True
     return False
 
+# ==================== بلاک جهانی ====================
+def get_global_blocked_users():
+    """دریافت لیست کاربران بلاک شده در سراسر ربات"""
+    data = load_data()
+    return data.get("global_blocked", [])
+
+def add_global_blocked_user(user_id):
+    """افزودن کاربر به لیست بلاک جهانی"""
+    data = load_data()
+    if "global_blocked" not in data:
+        data["global_blocked"] = []
+    if user_id not in data["global_blocked"]:
+        data["global_blocked"].append(user_id)
+        save_data(data)
+        return True
+    return False
+
+def remove_global_blocked_user(user_id):
+    """حذف کاربر از لیست بلاک جهانی"""
+    data = load_data()
+    if "global_blocked" in data and user_id in data["global_blocked"]:
+        data["global_blocked"].remove(user_id)
+        save_data(data)
+        return True
+    return False
+
+def is_user_globally_blocked(user_id):
+    """بررسی بلاک بودن یک کاربر"""
+    blocked = get_global_blocked_users()
+    return user_id in blocked
+
 # ==================== آمار ====================
 def get_stats(chat_id):
     data = load_data()
@@ -403,5 +436,5 @@ def get_user_total_couples(chat_id, user_id):
     return total
 
 def clear_data():
-    save_data({"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}})
+    save_data({"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}, "global_blocked": []})
     print("✅ دیتابیس پاک شد")
