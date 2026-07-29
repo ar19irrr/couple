@@ -3,7 +3,7 @@ import random
 import threading
 import asyncio
 import os
-from datetime import datetime, timedelta  # <--- اینجا اصلاح شد
+from datetime import datetime, timedelta
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -18,7 +18,9 @@ from database import (
     get_user_couple_stats, get_user_total_couples,
     set_user_gender, set_user_interest, get_user_profile,
     update_monthly_score, get_all_monthly_scores, reset_monthly_scores,
-    check_and_reset_blocked, sync_groups, load_data
+    check_and_reset_blocked, sync_groups, load_data,
+    get_global_blocked_users, add_global_blocked_user, 
+    remove_global_blocked_user, is_user_globally_blocked
 )
 from member_fetcher import get_all_members
 
@@ -182,10 +184,38 @@ def get_ai_response(prompt):
     history = [{"role": "user", "content": prompt}]
     return get_ai_response_with_history(history)
 
+def is_user_blocked(user_id):
+    """بررسی بلاک بودن کاربر"""
+    return is_user_globally_blocked(user_id)
+
+# ==================== Middleware برای بلاک ====================
+def check_blocked(update: Update, context: CallbackContext):
+    """بررسی بلاک بودن کاربر قبل از هر پردازش"""
+    if update.effective_user and is_user_blocked(update.effective_user.id):
+        return False
+    return True
+
 # ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
-    update.message.reply_text(
-        """🤖 ربات زوج‌یاب پیشرفته با هوش مصنوعی
+    user_id = update.effective_user.id
+    
+    if user_id == OWNER_ID:
+        start_text = """🤖 **ربات زوج‌یاب پیشرفته با هوش مصنوعی**
+
+📌 دستورات سریع:
+/ask <سوال> - پرسش از هوش مصنوعی 🧠
+/event - مناسبت‌های امروز 📅
+/couple - انتخاب زوج تصادفی 💞
+
+👑 **دستورات مالک:**
+/block <id> - بلاک کردن کاربر
+/unblock <id> - آنبلاک کردن کاربر
+/blocked_list - لیست کاربران بلاک شده
+/owner_stats - آمار کلی ربات
+/owner_users - لیست کاربران
+"""
+    else:
+        start_text = """🤖 **ربات زوج‌یاب پیشرفته با هوش مصنوعی**
 
 📌 برای مشاهده راهنمای کامل دستورات، از دستور /help استفاده کنید.
 
@@ -198,9 +228,12 @@ def start(update: Update, context: CallbackContext):
 /monthly_top - برترین‌های ماه 🏆
 
 ⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
-    )
+    
+    update.message.reply_text(start_text, parse_mode="Markdown")
 
 def help_command(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    
     help_text = """
 📖 راهنمای کامل ربات زوج‌یاب + هوش مصنوعی
 
@@ -265,11 +298,132 @@ def help_command(update: Update, context: CallbackContext):
 ✅ هر کاربر بعد از لاور شدن، ۷ روز در لیست سیاه می‌رود
 ✅ با تمام شدن اعضا، لیست سیاه خودکار ریست می‌شود
 ✅ هوش مصنوعی ۱۰ پیام آخر را به خاطر می‌سپارد
+"""
+    
+    if user_id == OWNER_ID:
+        help_text += """
+━━━━━━━━━━━━━━━━━━━━━
+👑 **دستورات مالک**
+━━━━━━━━━━━━━━━━━━━━━
 
+📌 /block <id> - بلاک کردن یک کاربر
+📌 /unblock <id> - آنبلاک کردن یک کاربر
+📌 /blocked_list - لیست کاربران بلاک شده
+📌 /owner_stats - آمار کلی ربات
+📌 /owner_users - لیست کاربران ثبت‌شده
+"""
+    
+    help_text += """
 ━━━━━━━━━━━━━━━━━━━━━
 🎉 ربات شما کامل است! لذت ببرید!
     """
     update.message.reply_text(help_text)
+
+# ==================== دستورات بلاک ====================
+def block_command(update: Update, context: CallbackContext):
+    """بلاک کردن یک کاربر (فقط مالک)"""
+    user_id = update.effective_user.id
+    
+    if user_id != OWNER_ID:
+        update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
+        return
+    
+    args = context.args
+    if not args:
+        update.message.reply_text(
+            "❌ لطفاً آیدی کاربر مورد نظر را وارد کنید.\n"
+            "مثال: `/block 123456789`\n"
+            "💡 برای گرفتن آیدی کاربر، روی اسمش در گروه کلیک کنید و گزینه Copy ID را بزنید."
+        )
+        return
+    
+    try:
+        target_user_id = int(args[0])
+    except ValueError:
+        update.message.reply_text("❌ آیدی کاربر باید عدد باشد.")
+        return
+    
+    if target_user_id == OWNER_ID:
+        update.message.reply_text("❌ نمی‌توانید خودتان را بلاک کنید!")
+        return
+    
+    if add_global_blocked_user(target_user_id):
+        try:
+            user = context.bot.get_chat(target_user_id)
+            user_name = user.first_name or "کاربر ناشناس"
+        except:
+            user_name = "کاربر ناشناس"
+        
+        update.message.reply_text(
+            f"✅ کاربر {user_name} (ID: {target_user_id}) با موفقیت بلاک شد.\n"
+            f"🔹 این کاربر دیگر نمی‌تواند از ربات استفاده کند."
+        )
+        logger.info(f"👑 مالک ربات کاربر {target_user_id} را بلاک کرد.")
+    else:
+        update.message.reply_text(f"ℹ️ کاربر {target_user_id} قبلاً بلاک شده است.")
+
+def unblock_command(update: Update, context: CallbackContext):
+    """آنبلاک کردن یک کاربر (فقط مالک)"""
+    user_id = update.effective_user.id
+    
+    if user_id != OWNER_ID:
+        update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
+        return
+    
+    args = context.args
+    if not args:
+        update.message.reply_text(
+            "❌ لطفاً آیدی کاربر مورد نظر را وارد کنید.\n"
+            "مثال: `/unblock 123456789`"
+        )
+        return
+    
+    try:
+        target_user_id = int(args[0])
+    except ValueError:
+        update.message.reply_text("❌ آیدی کاربر باید عدد باشد.")
+        return
+    
+    if remove_global_blocked_user(target_user_id):
+        try:
+            user = context.bot.get_chat(target_user_id)
+            user_name = user.first_name or "کاربر ناشناس"
+        except:
+            user_name = "کاربر ناشناس"
+        
+        update.message.reply_text(
+            f"✅ کاربر {user_name} (ID: {target_user_id}) با موفقیت آنبلاک شد.\n"
+            f"🔹 این کاربر دوباره می‌تواند از ربات استفاده کند."
+        )
+        logger.info(f"👑 مالک ربات کاربر {target_user_id} را آنبلاک کرد.")
+    else:
+        update.message.reply_text(f"ℹ️ کاربر {target_user_id} در لیست بلاک نیست.")
+
+def blocked_list_command(update: Update, context: CallbackContext):
+    """مشاهده لیست کاربران بلاک شده (فقط مالک)"""
+    user_id = update.effective_user.id
+    
+    if user_id != OWNER_ID:
+        update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
+        return
+    
+    blocked_users = get_global_blocked_users()
+    
+    if not blocked_users:
+        update.message.reply_text("📭 هیچ کاربری در لیست بلاک نیست.")
+        return
+    
+    msg = "🚫 **لیست کاربران بلاک شده:**\n\n"
+    for i, uid in enumerate(blocked_users, 1):
+        try:
+            user = context.bot.get_chat(uid)
+            user_name = user.first_name or "کاربر ناشناس"
+            username = f"@{user.username}" if user.username else "بدون یوزرنیم"
+            msg += f"{i}. {user_name} {username} (ID: {uid})\n"
+        except:
+            msg += f"{i}. کاربر ناشناس (ID: {uid})\n"
+    
+    update.message.reply_text(msg, parse_mode="Markdown")
 
 # ==================== دستور /event (تقویم شمسی) ====================
 def event_command(update: Update, context: CallbackContext):
@@ -278,7 +432,6 @@ def event_command(update: Update, context: CallbackContext):
     
     try:
         if user_message:
-            # اگر کاربر تاریخ وارد کرده بود (مثلاً 1405/1/1)
             parts = user_message.split('/')
             if len(parts) == 3:
                 year = int(parts[0])
@@ -295,19 +448,15 @@ def event_command(update: Update, context: CallbackContext):
                 update.message.reply_text("❌ فرمت تاریخ اشتباه است. مثال: /event 1405/1/1")
                 return
         else:
-            # دریافت مناسبت‌های امروز
             events_data = get_today_events()
-            # تاریخ امروز را از خروجی بگیریم
             jalali_date = events_data.get('jalali_date', {})
             date_str = f"{jalali_date.get('year', '')}/{jalali_date.get('month', '')}/{jalali_date.get('day', '')}"
         
-        # پردازش خروجی
         events = events_data.get('events', {})
         is_holiday = events_data.get('is_holiday', False)
         
         msg = f"📅 **تقویم روز {date_str}**\n\n"
         
-        # مناسبت‌های شمسی
         jalali_events = events.get('jalali', [])
         if jalali_events:
             msg += "🟢 **مناسبت‌های شمسی:**\n"
@@ -318,7 +467,6 @@ def event_command(update: Update, context: CallbackContext):
                 msg += f"  • {desc} {holiday_tag}\n"
             msg += "\n"
         
-        # مناسبت‌های میلادی
         gregorian_events = events.get('gregorian', [])
         if gregorian_events:
             msg += "🔵 **مناسبت‌های میلادی:**\n"
@@ -329,7 +477,6 @@ def event_command(update: Update, context: CallbackContext):
                 msg += f"  • {desc} {holiday_tag}\n"
             msg += "\n"
         
-        # مناسبت‌های هجری
         hijri_events = events.get('hijri', [])
         if hijri_events:
             msg += "🟡 **مناسبت‌های هجری قمری:**\n"
@@ -1005,8 +1152,13 @@ def main():
     except Exception as e:
         logger.warning(f"⚠️ خطا در پاک کردن Webhook: {e}")
     
+    # ===== Middleware برای بلاک =====
+    dp.add_handler(MessageHandler(Filters.all, check_blocked), group=0)
+    
+    # ===== Handler برای ریپلی =====
     dp.add_handler(MessageHandler(Filters.text & Filters.reply, handle_reply))
     
+    # ===== دستورات =====
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("event", event_command))
@@ -1025,6 +1177,12 @@ def main():
     dp.add_handler(CommandHandler("monthly_top", monthly_top_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
+    # ===== دستورات بلاک =====
+    dp.add_handler(CommandHandler("block", block_command))
+    dp.add_handler(CommandHandler("unblock", unblock_command))
+    dp.add_handler(CommandHandler("blocked_list", blocked_list_command))
+    
+    # ===== دستورات مالک =====
     dp.add_handler(CommandHandler("owner_stats", owner_stats_command))
     dp.add_handler(CommandHandler("owner_users", owner_users_command))
     
