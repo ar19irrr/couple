@@ -157,10 +157,10 @@ def start(update: Update, context: CallbackContext):
     update.message.reply_text(
         """🤖 ربات زوج‌یاب پیشرفته با هوش مصنوعی
 
-📌 **دستورات جدید:**
+📌 دستورات جدید:
 /ask <سوال> - پرسش سوال از هوش مصنوعی 🧠
 
-📌 **دستورات اصلی:**
+📌 دستورات اصلی:
 /start - این پیام
 /setgender - تنظیم جنسیت
 /setinterest - تنظیم علاقه
@@ -174,14 +174,13 @@ def start(update: Update, context: CallbackContext):
 /monthly_top - برترین‌های ماه
 /reset - ریست دیتابیس
 
-✨ **امکانات ویژه:**
+✨ امکانات ویژه:
 • انتخاب زوج بر اساس جنسیت و علایق
 • فال روزانه
 • سیستم امتیازدهی ماهانه
-• **پرسش و پاسخ با هوش مصنوعی** 🧠
+• پرسش و پاسخ با هوش مصنوعی 🧠
 
-⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد.""",
-        parse_mode="Markdown"
+⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
     )
 
 # ==================== تنظیم جنسیت ====================
@@ -326,7 +325,7 @@ def monthly_top_command(update: Update, context: CallbackContext):
     monthly_scores = get_all_monthly_scores(chat_id)
     sorted_users = sorted(monthly_scores.items(), key=lambda x: x[1], reverse=True)
     
-    msg = "🏆 **برترین لاورهای ماه**\n\n"
+    msg = "🏆 برترین لاورهای ماه\n\n"
     medals = ["🥇", "🥈", "🥉"]
     
     if sorted_users:
@@ -337,7 +336,7 @@ def monthly_top_command(update: Update, context: CallbackContext):
     else:
         msg += "📭 هنوز کسی امتیازی کسب نکرده!"
     
-    update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg)
 
 # ==================== اعلام برنده ماه با AI ====================
 def announce_monthly_winners(chat_id, bot):
@@ -357,20 +356,20 @@ def announce_monthly_winners(chat_id, bot):
         ai_message = get_ai_response(ai_prompt)
         
         if ai_message:
-            msg = f"🌟 **برنده لاورهای ماه** 🌟\n\n"
+            msg = f"🌟 برنده لاورهای ماه 🌟\n\n"
             msg += f"👤 {top_user['name']} با {top_score} بار لاور شدن!\n\n"
             msg += f"💬 پیام ویژه:\n{ai_message}"
         else:
-            msg = f"🌟 **برنده لاورهای ماه** 🌟\n\n"
+            msg = f"🌟 برنده لاورهای ماه 🌟\n\n"
             msg += f"👤 {top_user['name']} با {top_score} بار لاور شدن!\n"
             msg += "🎉 تبریک میگم! تو بهترین لاوری! ❤️"
     except Exception as e:
         logger.error(f"❌ خطا در AI: {e}")
-        msg = f"🌟 **برنده لاورهای ماه** 🌟\n\n"
+        msg = f"🌟 برنده لاورهای ماه 🌟\n\n"
         msg += f"👤 {top_user['name']} با {top_score} بار لاور شدن!\n"
         msg += "🎉 تبریک میگم! تو بهترین لاوری! ❤️"
     
-    bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
+    bot.send_message(chat_id=chat_id, text=msg)
     reset_monthly_scores(chat_id)
 
 def monthly_announcement_job(context):
@@ -402,8 +401,7 @@ def ask_command(update: Update, context: CallbackContext):
     if not user_message:
         update.message.reply_text(
             "❌ لطفاً سوال خود را بعد از /ask بنویسید.\n"
-            "مثال: `/ask بهترین فیلم تاریخ چیست؟`",
-            parse_mode="Markdown"
+            "مثال: /ask بهترین فیلم تاریخ چیست؟"
         )
         return
     
@@ -413,7 +411,7 @@ def ask_command(update: Update, context: CallbackContext):
         ai_response = get_ai_response(user_message)
         
         if ai_response:
-            loading_msg.edit_text(f"🤖 **پاسخ هوش مصنوعی:**\n\n{ai_response}", parse_mode="Markdown")
+            loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
         else:
             loading_msg.edit_text("❌ خطا در ارتباط با هوش مصنوعی. لطفاً دوباره تلاش کنید.")
             
@@ -518,7 +516,7 @@ def stats_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     stats = get_stats(chat_id)
     
-    msg = f"📊 **آمار کلی گروه:**\n\n"
+    msg = f"📊 آمار کلی گروه:\n\n"
     msg += f"👥 تعداد اعضا: {stats['total_members']} نفر\n"
     msg += f"💞 تعداد زوج‌ها: {stats['total_couples']} بار\n"
     msg += f"🌟 کاربران منحصر‌به‌فرد: {stats['unique_users']} نفر\n"
@@ -528,7 +526,7 @@ def stats_command(update: Update, context: CallbackContext):
         u2 = stats['last_couple'].get('user2', {})
         msg += f"\n💖 آخرین زوج:\n👤 {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')}"
     
-    update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg)
 
 def mystats_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -538,11 +536,11 @@ def mystats_command(update: Update, context: CallbackContext):
     total_couples = get_user_total_couples(chat_id, user_id)
     partner_stats = get_user_couple_stats(chat_id, user_id)
     
-    msg = f"📊 **آمار شخصی {user_name}**\n\n"
+    msg = f"📊 آمار شخصی {user_name}\n\n"
     msg += f"💞 تعداد کل لاورها: {total_couples} بار\n"
     
     if partner_stats:
-        msg += f"\n👥 **شریک‌های لاور:**\n"
+        msg += f"\n👥 شریک‌های لاور:\n"
         medals = ["🥇", "🥈", "🥉"]
         for i, partner in enumerate(partner_stats[:5]):
             medal = medals[i] if i < len(medals) else f"{i+1}."
@@ -553,13 +551,13 @@ def mystats_command(update: Update, context: CallbackContext):
     else:
         msg += f"\n📭 هنوز با کسی لاور نشدی!"
     
-    update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg)
 
 def reset_command(update: Update, context: CallbackContext):
     clear_data()
     update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
-# ==================== AI Message Handler (اصلاح شده) ====================
+# ==================== AI Message Handler ====================
 def ai_response(text):
     text_lower = text.lower()
     
@@ -583,9 +581,7 @@ def ai_response(text):
         return None
 
 def handle_ai_message(update: Update, context: CallbackContext):
-    """مدیریت پیام‌های هوشمند با بررسی وجود پیام"""
     try:
-        # بررسی اینکه پیام وجود داره
         if not update.message:
             return
         
@@ -709,5 +705,6 @@ def main():
     logger.info("🚀 ربات شروع به کار کرد...")
     updater.start_polling(drop_pending_updates=True, timeout=30)
     updater.idle()
+
 if __name__ == "__main__":
     main()
