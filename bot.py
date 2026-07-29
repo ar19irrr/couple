@@ -18,7 +18,7 @@ from database import (
     get_user_couple_stats, get_user_total_couples,
     set_user_gender, set_user_interest, get_user_profile,
     update_monthly_score, get_all_monthly_scores, reset_monthly_scores,
-    check_and_reset_blocked
+    check_and_reset_blocked, sync_groups, load_data
 )
 from member_fetcher import get_all_members
 
@@ -713,16 +713,34 @@ def reset_command(update: Update, context: CallbackContext):
 
 # ==================== دستورات ویژه مالک ====================
 def owner_stats_command(update: Update, context: CallbackContext):
+    """آمار ربات برای مالک (فقط OWNER_ID)"""
     user_id = update.effective_user.id
     
     if user_id != OWNER_ID:
         update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
         return
     
-    groups = get_groups()
+    # همگام‌سازی گروه‌ها
+    groups = sync_groups()
+    data = load_data()
+    
+    # جمع‌آوری آمار
+    total_users = set()
+    for chat_id in groups:
+        members = get_members(chat_id)
+        for m in members:
+            total_users.add(m.get("id"))
     
     msg = f"📊 آمار کلی ربات\n\n"
     msg += f"👥 تعداد گروه‌های فعال: {len(groups)} گروه\n"
+    msg += f"👤 تعداد کل کاربران ثبت‌شده: {len(total_users)} نفر\n"
+    
+    # دریافت تعداد کل زوج‌ها
+    total_couples = 0
+    for chat_id in groups:
+        history = get_couple_history(chat_id, 1000)
+        total_couples += len(history)
+    msg += f"💞 تعداد کل زوج‌ها: {total_couples} بار\n"
     
     if groups:
         msg += f"\n📌 لیست گروه‌های فعال:\n"
@@ -730,22 +748,50 @@ def owner_stats_command(update: Update, context: CallbackContext):
             try:
                 chat = context.bot.get_chat(chat_id)
                 chat_name = chat.title or chat.first_name or "گروه ناشناس"
-                msg += f"{i}. {chat_name} (ID: {chat_id})\n"
+                member_count = len(get_members(chat_id))
+                msg += f"{i}. {chat_name} (ID: {chat_id}) — {member_count} عضو\n"
             except:
                 msg += f"{i}. گروه ناشناس (ID: {chat_id})\n"
+    else:
+        msg += "\n📭 هیچ گروه فعالی یافت نشد."
     
     update.message.reply_text(msg)
 
 def owner_users_command(update: Update, context: CallbackContext):
+    """لیست کاربرانی که ربات رو استارت کردن (فقط مالک)"""
     user_id = update.effective_user.id
     
     if user_id != OWNER_ID:
         update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
         return
     
-    msg = "👥 لیست کاربرانی که ربات رو استارت کردن:\n\n"
-    msg += "🔹 برای ذخیره کاربران، باید یک دیتابیس جداگانه برای کاربران اضافه کنید.\n"
-    msg += "🔹 در حال حاضر، اطلاعات کاربران در تاریخچه زوج‌ها موجود است."
+    groups = get_groups()
+    all_users = {}
+    
+    for chat_id in groups:
+        members = get_members(chat_id)
+        for m in members:
+            user_id_key = m.get("id")
+            if user_id_key:
+                if user_id_key not in all_users:
+                    all_users[user_id_key] = {
+                        "name": m.get("name", "بدون نام"),
+                        "username": m.get("username", "ندارد"),
+                        "groups": []
+                    }
+                all_users[user_id_key]["groups"].append(chat_id)
+    
+    msg = "👥 لیست کاربران ثبت‌شده در ربات\n\n"
+    
+    if all_users:
+        for i, (uid, info) in enumerate(list(all_users.items())[:20], 1):
+            groups_count = len(info["groups"])
+            msg += f"{i}. {info['name']} (@{info['username']}) — {groups_count} گروه\n"
+        
+        if len(all_users) > 20:
+            msg += f"\n... و {len(all_users) - 20} نفر دیگر"
+    else:
+        msg += "📭 هنوز کاربری ثبت نشده است."
     
     update.message.reply_text(msg)
 
