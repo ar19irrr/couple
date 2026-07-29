@@ -188,13 +188,6 @@ def is_user_blocked(user_id):
     """بررسی بلاک بودن کاربر"""
     return is_user_globally_blocked(user_id)
 
-# ==================== Middleware برای بلاک ====================
-def check_blocked(update: Update, context: CallbackContext):
-    """بررسی بلاک بودن کاربر قبل از هر پردازش"""
-    if update.effective_user and is_user_blocked(update.effective_user.id):
-        return False
-    return True
-
 # ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -261,7 +254,7 @@ def help_command(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /ask <سوال> - پرسش سوال از هوش مصنوعی
-   مثال: /ask بهترین فیلم تاریخ چیست؟
+   مثال: /ask بهترین فیلم تاریخ چیست？
 
 📌 ریپلی کنید - روی پیام ربات ریپلی کنید
    تا مکالمه ادامه پیدا کند (بدون نیاز به /ask)
@@ -286,7 +279,7 @@ def help_command(update: Update, context: CallbackContext):
 🔧 مدیریت گروه (فقط ادمین)
 ━━━━━━━━━━━━━━━━━━━━━
 
-📌 /addgroup - فعال کردن ربات در این گروه
+📌 /addgroup - فعال کردن ربات در اینグループ
 📌 /reset - ریست کامل دیتابیس
 
 ━━━━━━━━━━━━━━━━━━━━━
@@ -1151,9 +1144,6 @@ def main():
         logger.info("✅ Webhook قبلی پاک شد.")
     except Exception as e:
         logger.warning(f"⚠️ خطا در پاک کردن Webhook: {e}")
-    
-    # ===== Middleware برای بلاک =====
-    dp.add_handler(MessageHandler(Filters.all, check_blocked), group=0)
     
     # ===== Handler برای ریپلی =====
     dp.add_handler(MessageHandler(Filters.text & Filters.reply, handle_reply))
