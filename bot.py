@@ -134,13 +134,16 @@ def get_ai_response(prompt):
     """دریافت پاسخ از هوش مصنوعی با OpenRouter"""
     try:
         from openai import OpenAI
+        
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            logger.error("❌ OPENROUTER_API_KEY تنظیم نشده است!")
+            return None
+        
         client = OpenAI(
-            api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+            api_key=api_key,
             base_url="https://openrouter.ai/api/v1"
         )
-        
-        if not os.environ.get("OPENROUTER_API_KEY"):
-            return None
         
         response = client.chat.completions.create(
             model="deepseek/deepseek-v4-flash:free",
