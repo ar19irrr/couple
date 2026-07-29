@@ -211,18 +211,17 @@ def start(update: Update, context: CallbackContext):
 • فال روزانه
 • سیستم امتیازدهی ماهانه
 • پرسش و پاسخ با هوش مصنوعی 🧠
-• پاسخ به ریپلی و حفظ تاریخچه مکالمه
+• پاسخ خودکار به ریپلی‌ها و حفظ تاریخچه
 
 ⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
     )
 
-# ==================== دستور /ask با ریپلی و تاریخچه ====================
+# ==================== دستور /ask ====================
 def ask_command(update: Update, context: CallbackContext):
     """دستور /ask با پشتیبانی از ریپلی و تاریخچه"""
     user_message = ' '.join(context.args)
     reply_to_message = update.message.reply_to_message
     
-    # ===== اگر روی پیام ریپلی شده =====
     if reply_to_message and not user_message:
         if reply_to_message.from_user.is_bot:
             user_message = reply_to_message.text
@@ -268,6 +267,56 @@ def ask_command(update: Update, context: CallbackContext):
             
     except Exception as e:
         logger.error(f"❌ خطا در /ask: {e}")
+        loading_msg.edit_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
+
+# ==================== پاسخ خودکار به ریپلی‌ها ====================
+def handle_reply(update: Update, context: CallbackContext):
+    """پاسخ خودکار به ریپلی‌ها (بدون نیاز به /ask)"""
+    # بررسی اینکه پیام ریپلی شده یا نه
+    if not update.message.reply_to_message:
+        return
+    
+    # بررسی اینکه ریپلی به پیام خود ربات هست یا نه
+    if not update.message.reply_to_message.from_user.is_bot:
+        return
+    
+    # دریافت متن ریپلی
+    user_message = update.message.text
+    if not user_message:
+        return
+    
+    loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
+    
+    try:
+        user_id = update.effective_user.id
+        history = context.user_data.get("chat_history", [])
+        
+        history.append({"role": "user", "content": user_message})
+        
+        if len(history) > 6:
+            history = history[-6:]
+        
+        ai_response = get_ai_response_with_history(history)
+        
+        if ai_response:
+            history.append({"role": "assistant", "content": ai_response})
+            context.user_data["chat_history"] = history
+            
+            if len(ai_response) > 4000:
+                parts = [ai_response[i:i+4000] for i in range(0, len(ai_response), 4000)]
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی (بخش ۱ از {len(parts)}):\n\n{parts[0]}")
+                for i, part in enumerate(parts[1:], 2):
+                    update.message.reply_text(f"🤖 پاسخ هوش مصنوعی (بخش {i} از {len(parts)}):\n\n{part}")
+            else:
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
+        else:
+            loading_msg.edit_text(
+                "❌ خطا در دریافت پاسخ.\n"
+                "لطفاً چند دقیقه دیگر تلاش کنید."
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ خطا در handle_reply: {e}")
         loading_msg.edit_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
 
 # ==================== پاک کردن تاریخچه ====================
@@ -624,6 +673,7 @@ def reset_command(update: Update, context: CallbackContext):
     clear_data()
     update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
+# ==================== AI Message Handler ====================
 def ai_response(text):
     text_lower = text.lower()
     
@@ -760,6 +810,9 @@ def main():
     
     dp.add_handler(CallbackQueryHandler(button_callback))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
+    
+    # ===== اضافه کردن Handler برای ریپلی خودکار =====
+    dp.add_handler(MessageHandler(Filters.text & Filters.reply, handle_reply))
     
     schedule_daily_jobs(dp)
     schedule_monthly_announcement(dp)
