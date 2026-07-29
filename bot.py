@@ -663,14 +663,25 @@ def schedule_daily_jobs(dispatcher):
 
 # ==================== اجرا ====================
 def main():
+    # ===== کلین استارت =====
+    # اجرای Flask
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
+    # ===== راه‌اندازی ربات =====
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
-    # دستورات
+    # ===== اضافه کردن کلین استارت =====
+    try:
+        # پاک کردن Webhookهای قبلی
+        updater.bot.delete_webhook()
+        logger.info("✅ Webhook قبلی پاک شد.")
+    except Exception as e:
+        logger.warning(f"⚠️ خطا در پاک کردن Webhook: {e}")
+    
+    # ===== دستورات =====
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("ask", ask_command))
     dp.add_handler(CommandHandler("setgender", setgender_command))
@@ -686,17 +697,17 @@ def main():
     dp.add_handler(CommandHandler("monthly_top", monthly_top_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
-    # Callback و Message Handler
+    # ===== Callback و Message Handler =====
     dp.add_handler(CallbackQueryHandler(button_callback))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
-    # زمان‌بندی‌ها
+    # ===== زمان‌بندی‌ها =====
     schedule_daily_jobs(dp)
     schedule_monthly_announcement(dp)
     
+    # ===== شروع ربات =====
     logger.info("🚀 ربات شروع به کار کرد...")
     updater.start_polling(drop_pending_updates=True, timeout=30)
     updater.idle()
-
 if __name__ == "__main__":
     main()
