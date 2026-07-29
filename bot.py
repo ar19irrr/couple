@@ -460,4 +460,312 @@ def ask_command(update: Update, context: CallbackContext):
                 for i, part in enumerate(parts[1:], 2):
                     update.message.reply_text(f"🤖 پاسخ هوش مصنوعی (بخش {i} از {len(parts)}):\n\n{part}")
             else:
-                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
+        else:
+            loading_msg.edit_text(
+                "❌ خطا در دریافت پاسخ.\n"
+                "لطفاً چند دقیقه دیگر تلاش کنید یا سوال خود را کوتاه‌تر کنید."
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ خطا در /ask: {e}")
+        loading_msg.edit_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
+
+# ==================== بقیه دستورات ====================
+def addgroup_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    logger.info(f"📌 تلاش برای افزودن گروه: {chat_id}")
+    
+    try:
+        bot_member = context.bot.get_chat_member(chat_id, context.bot.id)
+        if bot_member.status not in ['administrator', 'creator']:
+            update.message.reply_text(
+                "❌ ربات ادمین گروه نیست!\n"
+                "لطفاً مراحل زیر را انجام دهید:\n"
+                "1️⃣ روی اسم ربات در گروه کلیک کنید\n"
+                "2️⃣ گزینه Make Admin را بزنید\n"
+                "3️⃣ تمام دسترسی‌ها را فعال کنید\n"
+                "4️⃣ دوباره /addgroup را بزنید"
+            )
+            return
+    except Exception as e:
+        logger.error(f"❌ خطا در بررسی ادمین: {e}")
+        update.message.reply_text("❌ خطا در بررسی دسترسی ربات.")
+        return
+    
+    if add_group(chat_id):
+        update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
+        members = update_members_sync(chat_id)
+        if members:
+            update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
+        else:
+            update.message.reply_text("❌ خطا در دریافت اعضا. لطفاً VPN را روشن کنید و ربات را ادمین کنید.")
+    else:
+        update.message.reply_text(f"ℹ️ این گروه قبلاً به لیست اضافه شده است.")
+
+def update_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
+    
+    members = update_members_sync(chat_id)
+    if members:
+        update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
+    else:
+        update.message.reply_text("❌ خطا در دریافت اعضا. لطفاً VPN را روشن کنید و ربات را ادمین کنید.")
+
+def last_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    last = get_last_couple(chat_id)
+    
+    if last and isinstance(last, dict):
+        u1 = last.get("user1", {})
+        u2 = last.get("user2", {})
+        date = last.get("date", "")[:10]
+        update.message.reply_text(
+            f"""📅 آخرین زوج ({date})
+
+👤 {u1.get('name', 'نامشخص')}
+یوزرنیم: @{u1.get('username', 'ندارد')}
+❤️ با ❤️
+👤 {u2.get('name', 'نامشخص')}
+یوزرنیم: @{u2.get('username', 'ندارد')}"""
+        )
+    else:
+        update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
+
+def count_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    members = get_members(chat_id)
+    blocked = get_blocked_users(chat_id)
+    
+    update.message.reply_text(
+        f"""👥 آمار اعضا:
+
+🔹 کل اعضا: {len(members)} نفر
+🔹 اعضای قابل انتخاب: {len(members) - len(blocked)} نفر
+🔹 در لیست سیاه: {len(blocked)} نفر (۷ روزه)"""
+    )
+
+def history_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    history = get_couple_history(chat_id, 10)
+    
+    if not history:
+        update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
+        return
+    
+    msg = "📜 تاریخچه ۱۰ زوج آخر:\n\n"
+    for i, couple in enumerate(reversed(history), 1):
+        if isinstance(couple, dict):
+            u1 = couple.get("user1", {})
+            u2 = couple.get("user2", {})
+            date = couple.get("date", "")[:10]
+            msg += f"{i}. {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')} ({date})\n"
+    
+    update.message.reply_text(msg)
+
+def stats_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    stats = get_stats(chat_id)
+    
+    msg = f"📊 آمار کلی گروه:\n\n"
+    msg += f"👥 تعداد اعضا: {stats['total_members']} نفر\n"
+    msg += f"💞 تعداد زوج‌ها: {stats['total_couples']} بار\n"
+    msg += f"🌟 کاربران منحصر‌به‌فرد: {stats['unique_users']} نفر\n"
+    
+    if stats.get('last_couple') and isinstance(stats['last_couple'], dict):
+        u1 = stats['last_couple'].get('user1', {})
+        u2 = stats['last_couple'].get('user2', {})
+        msg += f"\n💖 آخرین زوج:\n👤 {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')}"
+    
+    update.message.reply_text(msg)
+
+def mystats_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    user_name = update.effective_user.first_name or "کاربر"
+    
+    total_couples = get_user_total_couples(chat_id, user_id)
+    partner_stats = get_user_couple_stats(chat_id, user_id)
+    
+    msg = f"📊 آمار شخصی {user_name}\n\n"
+    msg += f"💞 تعداد کل لاورها: {total_couples} بار\n"
+    
+    if partner_stats:
+        msg += f"\n👥 شریک‌های لاور:\n"
+        medals = ["🥇", "🥈", "🥉"]
+        for i, partner in enumerate(partner_stats[:5]):
+            medal = medals[i] if i < len(medals) else f"{i+1}."
+            msg += f"{medal} {partner['name']} (@{partner['username']}) — {partner['count']} بار\n"
+        
+        if len(partner_stats) > 5:
+            msg += f"\nو {len(partner_stats) - 5} نفر دیگر..."
+    else:
+        msg += f"\n📭 هنوز با کسی لاور نشدی!"
+    
+    update.message.reply_text(msg)
+
+def reset_command(update: Update, context: CallbackContext):
+    clear_data()
+    update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
+
+# ==================== AI Message Handler ====================
+def ai_response(text):
+    text_lower = text.lower()
+    
+    if "عشق" in text_lower or "دوست" in text_lower:
+        return random.choice([
+            "💖 عشق زیباترین احساس دنیاست!",
+            "❤️ عشق یعنی همین...",
+            "💕 عشق همیشه در قلب‌ها جاری است!"
+        ])
+    elif "خنده" in text_lower or "شوخی" in text_lower:
+        return random.choice([
+            "😂 خنده بهترین داروی دنیاست!",
+            "😄 شوخی با عشق قشنگ‌تر میشه!",
+            "🤣 میدونستم که میخندی!"
+        ])
+    elif "سلام" in text_lower:
+        return "👋 سلام! چطور می‌تونم کمکت کنم؟"
+    elif "خوبی" in text_lower or "چطوری" in text_lower:
+        return "❤️ خوبم، ممنون! تو چطوری؟"
+    else:
+        return None
+
+def handle_ai_message(update: Update, context: CallbackContext):
+    try:
+        if not update.message:
+            return
+        
+        user_message = update.message.text
+        if not user_message:
+            return
+        
+        response = ai_response(user_message)
+        if response:
+            update.message.reply_text(response)
+    except Exception as e:
+        logger.error(f"❌ خطا در handle_ai_message: {e}")
+
+# ==================== کار روزانه (با ریست خودکار) ====================
+def daily_job(context: CallbackContext):
+    chat_id = context.job.context
+    bot = context.bot
+    
+    logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
+    members = update_members_sync(chat_id)
+    if not members:
+        bot.send_message(chat_id=chat_id, text="❌ خطا در دریافت لیست اعضا.")
+        return
+    
+    # ===== بررسی و ریست خودکار لیست سیاه =====
+    check_and_reset_blocked(chat_id)
+    
+    blocked = get_blocked_users(chat_id)
+    available_members = [m for m in members if m["id"] not in blocked]
+    
+    # اگه تعداد قابل انتخاب کم بود، ریست کن
+    if len(available_members) < 2:
+        check_and_reset_blocked(chat_id)
+        blocked = get_blocked_users(chat_id)
+        available_members = [m for m in members if m["id"] not in blocked]
+        
+        if len(available_members) < 2:
+            bot.send_message(chat_id=chat_id, text="❌ تعداد اعضای قابل انتخاب کافی نیست.")
+            return
+    
+    user1, user2 = random.sample(available_members, 2)
+    save_couple(chat_id, user1, user2)
+    
+    update_monthly_score(chat_id, user1["id"])
+    update_monthly_score(chat_id, user2["id"])
+    
+    fortune = get_daily_fortune()
+    
+    msg = f"""{random.choice(COUPLE_MESSAGES)}
+به پای هم پیر سیر دیر و عاشق باشید 🫂
+پایدار تا پای دار 
+باهم بمیرید زنده شوید 
+{random.choice(JOKE_MESSAGES)}
+
+👤 {user1['name']}
+یوزرنیم: @{user1['username']}
+❤️ با ❤️
+👤 {user2['name']}
+یوزرنیم: @{user2['username']}
+
+{random.choice(CELEBRATION_MESSAGES)}
+
+🌟 فال امروز: {fortune}"""
+    
+    bot.send_message(chat_id=chat_id, text=msg)
+    clear_blocked_users(chat_id)
+    logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
+
+# ==================== زمان‌بندی ====================
+def schedule_daily_jobs(dispatcher):
+    job_queue = dispatcher.job_queue
+    if not job_queue:
+        logger.warning("⚠️ JobQueue در دسترس نیست!")
+        return
+    
+    groups = get_groups()
+    if not groups:
+        logger.info("ℹ️ هیچ گروه فعالی برای زمان‌بندی یافت نشد.")
+        return
+    
+    for chat_id in groups:
+        job_queue.run_repeating(daily_job, interval=86400, first=10, context=chat_id)
+        logger.info(f"✅ کار روزانه برای گروه {chat_id} تنظیم شد.")
+
+# ==================== اجرا ====================
+def main():
+    # ===== کلین استارت =====
+    # اجرای Flask
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
+    
+    # ===== راه‌اندازی ربات =====
+    updater = Updater(token=config.BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
+    
+    # ===== اضافه کردن کلین استارت =====
+    try:
+        # پاک کردن Webhookهای قبلی
+        updater.bot.delete_webhook()
+        logger.info("✅ Webhook قبلی پاک شد.")
+    except Exception as e:
+        logger.warning(f"⚠️ خطا در پاک کردن Webhook: {e}")
+    
+    # ===== دستورات =====
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("ask", ask_command))
+    dp.add_handler(CommandHandler("setgender", setgender_command))
+    dp.add_handler(CommandHandler("setinterest", setinterest_command))
+    dp.add_handler(CommandHandler("addgroup", addgroup_command))
+    dp.add_handler(CommandHandler("couple", couple_command))
+    dp.add_handler(CommandHandler("update", update_command))
+    dp.add_handler(CommandHandler("last", last_command))
+    dp.add_handler(CommandHandler("count", count_command))
+    dp.add_handler(CommandHandler("history", history_command))
+    dp.add_handler(CommandHandler("stats", stats_command))
+    dp.add_handler(CommandHandler("mystats", mystats_command))
+    dp.add_handler(CommandHandler("monthly_top", monthly_top_command))
+    dp.add_handler(CommandHandler("reset", reset_command))
+    
+    # ===== Callback و Message Handler =====
+    dp.add_handler(CallbackQueryHandler(button_callback))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
+    
+    # ===== زمان‌بندی‌ها =====
+    schedule_daily_jobs(dp)
+    schedule_monthly_announcement(dp)
+    
+    # ===== شروع ربات =====
+    logger.info("🚀 ربات شروع به کار کرد...")
+    updater.start_polling(drop_pending_updates=True, timeout=20)
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
