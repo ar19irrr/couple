@@ -58,6 +58,46 @@ def remove_group(chat_id):
         return True
     return False
 
+def get_all_chats_from_members():
+    """دریافت لیست همه گروه‌هایی که در دیتابیس وجود دارند"""
+    data = load_data()
+    chats = set()
+    
+    for chat_id in data.get("members", {}).keys():
+        chats.add(int(chat_id))
+    for chat_id in data.get("last_couple", {}).keys():
+        chats.add(int(chat_id))
+    for chat_id in data.get("history", {}).keys():
+        chats.add(int(chat_id))
+    for chat_id in data.get("blocked", {}).keys():
+        chats.add(int(chat_id))
+    for chat_id in data.get("monthly_scores", {}).keys():
+        chats.add(int(chat_id))
+    for chat_id in data.get("profiles", {}).keys():
+        chats.add(int(chat_id))
+    
+    return list(chats)
+
+def sync_groups():
+    """همگام‌سازی لیست گروه‌ها با دیتابیس (اضافه کردن گروه‌های موجود)"""
+    data = load_data()
+    existing_groups = set(data.get("groups", []))
+    
+    all_chats = get_all_chats_from_members()
+    
+    new_groups = 0
+    for chat_id in all_chats:
+        if chat_id not in existing_groups:
+            existing_groups.add(chat_id)
+            new_groups += 1
+    
+    if new_groups > 0:
+        data["groups"] = list(existing_groups)
+        save_data(data)
+        print(f"✅ {new_groups} گروه جدید به لیست گروه‌های فعال اضافه شد.")
+    
+    return list(existing_groups)
+
 # ==================== اعضا ====================
 def get_members(chat_id):
     data = load_data()
@@ -154,7 +194,6 @@ def save_couple(chat_id, user1, user2):
     if len(data["history"][chat_id_str]) > 50:
         data["history"][chat_id_str] = data["history"][chat_id_str][-50:]
     
-    # لیست سیاه
     if "blocked" not in data:
         data["blocked"] = {}
     if chat_id_str not in data["blocked"]:
@@ -223,14 +262,11 @@ def clear_blocked_users(chat_id):
         save_data(data)
 
 def check_and_reset_blocked(chat_id):
-    """بررسی و ریست لیست سیاه در صورت عدم وجود عضو قابل انتخاب"""
     members = get_members(chat_id)
     blocked = get_blocked_users(chat_id)
     
-    # تعداد اعضای قابل انتخاب
     available = [m for m in members if m["id"] not in blocked]
     
-    # اگه تعداد قابل انتخاب کمتر از ۲ باشه و حداقل ۲ عضو وجود داشته باشه، لیست سیاه رو ریست کن
     if len(available) < 2 and len(members) >= 2:
         data = load_data()
         chat_id_str = str(chat_id)
