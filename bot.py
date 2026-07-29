@@ -146,7 +146,7 @@ def get_ai_response(prompt):
         )
         
         response = client.chat.completions.create(
-            model="deepseek/deepseek-v4-flash:free",
+            model="deepseek/deepseek-v4-flash",  # مدل اصلاح شده
             messages=[{"role": "user", "content": prompt}],
             max_tokens=500
         )
