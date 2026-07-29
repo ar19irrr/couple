@@ -100,14 +100,6 @@ GENDERS = {
     "other": "🌈 سایر"
 }
 
-# ==================== لیست مدل‌های رایگان ====================
-FREE_MODELS = [
-    "deepseek/deepseek-v4-flash",
-    "microsoft/phi-3-mini-4k-instruct:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
-    "mistralai/mistral-7b-instruct:free",
-]
-
 # ==================== تابع دریافت اعضا ====================
 def update_members_sync(chat_id):
     try:
@@ -137,9 +129,9 @@ def update_members_sync(chat_id):
 def get_daily_fortune():
     return random.choice(FORTUNES)
 
-# ==================== هوش مصنوعی (OpenRouter) با مدیریت خطای 429 ====================
+# ==================== هوش مصنوعی (فقط DeepSeek) ====================
 def get_ai_response(prompt):
-    """دریافت پاسخ از هوش مصنوعی با OpenRouter - تلاش با چند مدل"""
+    """دریافت پاسخ از هوش مصنوعی با DeepSeek"""
     try:
         from openai import OpenAI
         
@@ -153,25 +145,13 @@ def get_ai_response(prompt):
             base_url="https://openrouter.ai/api/v1"
         )
         
-        # تلاش با مدل‌های مختلف
-        for model in FREE_MODELS:
-            try:
-                logger.info(f"🔄 تلاش با مدل: {model}")
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=150,
-                    timeout=15
-                )
-                content = response.choices[0].message.content
-                if content:
-                    logger.info(f"✅ مدل {model} پاسخ داد")
-                    return content
-            except Exception as e:
-                logger.warning(f"⚠️ مدل {model} خطا داد: {e}")
-                continue
-        
-        return None  # اگر همه مدل‌ها خطا دادند
+        response = client.chat.completions.create(
+            model="deepseek/deepseek-v4-flash",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=200,
+            timeout=15
+        )
+        return response.choices[0].message.content
             
     except Exception as e:
         logger.error(f"❌ خطا در AI: {e}")
@@ -418,9 +398,9 @@ def schedule_monthly_announcement(dispatcher):
         context=dispatcher
     )
 
-# ==================== دستور /ask (بهینه شده) ====================
+# ==================== دستور /ask ====================
 def ask_command(update: Update, context: CallbackContext):
-    """دستور /ask با مدیریت خطای 429"""
+    """دستور /ask برای پرسش سوال از هوش مصنوعی"""
     user_message = ' '.join(context.args)
     
     if not user_message:
@@ -440,7 +420,7 @@ def ask_command(update: Update, context: CallbackContext):
         else:
             loading_msg.edit_text(
                 "❌ خطا در دریافت پاسخ.\n"
-                "لطفاً چند دقیقه دیگر تلاش کنید یا مدل دیگری را امتحان کنید."
+                "لطفاً چند دقیقه دیگر تلاش کنید."
             )
             
     except Exception as e:
