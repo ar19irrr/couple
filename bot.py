@@ -130,9 +130,9 @@ def update_members_sync(chat_id):
 def get_daily_fortune():
     return random.choice(FORTUNES)
 
-# ==================== هوش مصنوعی (DeepSeek) ====================
-def get_ai_response(prompt):
-    """دریافت پاسخ از هوش مصنوعی با DeepSeek - بهینه شده برای پاسخ‌های طولانی"""
+# ==================== هوش مصنوعی با تاریخچه ====================
+def get_ai_response_with_history(history):
+    """دریافت پاسخ از هوش مصنوعی با تاریخچه مکالمه"""
     try:
         from openai import OpenAI
         
@@ -146,14 +146,15 @@ def get_ai_response(prompt):
             base_url="https://openrouter.ai/api/v1"
         )
         
-        # تلاش اول با توکن بیشتر برای پاسخ‌های طولانی
+        messages = [
+            {"role": "system", "content": "شما یک دستیار هوشمند و دقیق فارسی هستید. به سوالات کاربر به طور کامل، دقیق و مفید پاسخ دهید. پاسخ‌های شما باید مرتبط با مکالمه قبلی باشد."}
+        ]
+        messages.extend(history)
+        
         try:
             response = client.chat.completions.create(
                 model="deepseek/deepseek-v4-flash",
-                messages=[
-                    {"role": "system", "content": "شما یک دستیار هوشمند و دقیق فارسی هستید. به سوالات کاربر به طور کامل، دقیق و مفید پاسخ دهید. اگر اطلاعاتی ندارید، صادقانه بگویید."},
-                    {"role": "user", "content": prompt}
-                ],
+                messages=messages,
                 max_tokens=600,
                 temperature=0.7,
                 timeout=25
@@ -162,15 +163,11 @@ def get_ai_response(prompt):
             if content and len(content) > 10:
                 return content
         except Exception as e:
-            logger.warning(f"⚠️ تلاش اول با توکن بیشتر خطا داد: {e}")
+            logger.warning(f"⚠️ تلاش اول خطا داد: {e}")
         
-        # تلاش دوم با توکن کمتر (در صورت خطا)
         response = client.chat.completions.create(
             model="deepseek/deepseek-v4-flash",
-            messages=[
-                {"role": "system", "content": "شما یک دستیار هوشمند فارسی هستید. به سوالات کاربر پاسخ دقیق و مختصر دهید."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
             max_tokens=300,
             temperature=0.7,
             timeout=15
@@ -181,6 +178,11 @@ def get_ai_response(prompt):
         logger.error(f"❌ خطا در AI: {e}")
         return None
 
+def get_ai_response(prompt):
+    """دریافت پاسخ از هوش مصنوعی (بدون تاریخچه)"""
+    history = [{"role": "user", "content": prompt}]
+    return get_ai_response_with_history(history)
+
 # ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
     update.message.reply_text(
@@ -188,6 +190,7 @@ def start(update: Update, context: CallbackContext):
 
 📌 دستورات جدید:
 /ask <سوال> - پرسش سوال از هوش مصنوعی 🧠
+/clear_history - پاک کردن تاریخچه مکالمه
 
 📌 دستورات اصلی:
 /start - این پیام
@@ -208,11 +211,71 @@ def start(update: Update, context: CallbackContext):
 • فال روزانه
 • سیستم امتیازدهی ماهانه
 • پرسش و پاسخ با هوش مصنوعی 🧠
+• پاسخ به ریپلی و حفظ تاریخچه مکالمه
 
 ⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
     )
 
-# ==================== تنظیم جنسیت ====================
+# ==================== دستور /ask با ریپلی و تاریخچه ====================
+def ask_command(update: Update, context: CallbackContext):
+    """دستور /ask با پشتیبانی از ریپلی و تاریخچه"""
+    user_message = ' '.join(context.args)
+    reply_to_message = update.message.reply_to_message
+    
+    # ===== اگر روی پیام ریپلی شده =====
+    if reply_to_message and not user_message:
+        if reply_to_message.from_user.is_bot:
+            user_message = reply_to_message.text
+            if user_message and "🤖 پاسخ هوش مصنوعی" in user_message:
+                user_message = user_message.split("\n\n")[-1] if "\n\n" in user_message else user_message
+        else:
+            user_message = reply_to_message.text
+    
+    if not user_message:
+        update.message.reply_text(
+            "❌ لطفاً سوال خود را بعد از /ask بنویسید یا روی یک پیام ریپلی کنید.\n"
+            "مثال: /ask بهترین فیلم تاریخ چیست؟"
+        )
+        return
+    
+    loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
+    
+    try:
+        history = context.user_data.get("chat_history", [])
+        history.append({"role": "user", "content": user_message})
+        
+        if len(history) > 5:
+            history = history[-5:]
+        
+        ai_response = get_ai_response_with_history(history)
+        
+        if ai_response:
+            history.append({"role": "assistant", "content": ai_response})
+            context.user_data["chat_history"] = history
+            
+            if len(ai_response) > 4000:
+                parts = [ai_response[i:i+4000] for i in range(0, len(ai_response), 4000)]
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی (بخش ۱ از {len(parts)}):\n\n{parts[0]}")
+                for i, part in enumerate(parts[1:], 2):
+                    update.message.reply_text(f"🤖 پاسخ هوش مصنوعی (بخش {i} از {len(parts)}):\n\n{part}")
+            else:
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
+        else:
+            loading_msg.edit_text(
+                "❌ خطا در دریافت پاسخ.\n"
+                "لطفاً چند دقیقه دیگر تلاش کنید یا سوال خود را کوتاه‌تر کنید."
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ خطا در /ask: {e}")
+        loading_msg.edit_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
+
+# ==================== پاک کردن تاریخچه ====================
+def clear_history_command(update: Update, context: CallbackContext):
+    context.user_data["chat_history"] = []
+    update.message.reply_text("✅ تاریخچه مکالمه پاک شد!")
+
+# ==================== بقیه دستورات ====================
 def setgender_command(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton("👨 مرد", callback_data="gender_male")],
@@ -226,7 +289,6 @@ def setgender_command(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
-# ==================== تنظیم علاقه ====================
 def setinterest_command(update: Update, context: CallbackContext):
     keyboard = []
     for key, value in INTERESTS.items():
@@ -242,7 +304,6 @@ def setinterest_command(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
-# ==================== پردازش دکمه‌ها ====================
 def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
@@ -263,7 +324,6 @@ def button_callback(update: Update, context: CallbackContext):
         interest_label = INTERESTS.get(interest, {}).get("label", interest)
         query.edit_message_text(f"✅ علاقه شما به {interest_label} تنظیم شد!")
 
-# ==================== انتخاب زوج (با ریست خودکار) ====================
 def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال انتخاب زوج...")
@@ -273,7 +333,6 @@ def couple_command(update: Update, context: CallbackContext):
         update.message.reply_text("❌ لیست اعضا خالی است. ابتدا /update را بزنید.")
         return
     
-    # ===== بررسی و ریست خودکار لیست سیاه =====
     check_and_reset_blocked(chat_id)
     
     blocked = get_blocked_users(chat_id)
@@ -281,7 +340,6 @@ def couple_command(update: Update, context: CallbackContext):
     user_profile = get_user_profile(chat_id, user_id)
     user_gender = user_profile.get("gender")
     
-    # فیلتر بر اساس جنسیت
     if user_gender:
         opposite_gender = "female" if user_gender == "male" else "male" if user_gender == "female" else None
         if opposite_gender:
@@ -299,9 +357,7 @@ def couple_command(update: Update, context: CallbackContext):
     else:
         available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
     
-    # اگه تعداد قابل انتخاب کم بود، دوباره چک کن
     if len(available_members) < 2:
-        # یه بار دیگه لیست سیاه رو ریست کن و دوباره امتحان کن
         check_and_reset_blocked(chat_id)
         blocked = get_blocked_users(chat_id)
         available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
@@ -315,7 +371,6 @@ def couple_command(update: Update, context: CallbackContext):
             )
             return
     
-    # فیلتر بر اساس علاقه
     user_interest = user_profile.get("interest")
     if user_interest and len(available_members) >= 2:
         interest_matched = []
@@ -331,7 +386,6 @@ def couple_command(update: Update, context: CallbackContext):
     user1, user2 = selected[0], selected[1]
     save_couple(chat_id, user1, user2)
     
-    # امتیاز ماهانه
     update_monthly_score(chat_id, user1["id"])
     update_monthly_score(chat_id, user2["id"])
     
@@ -358,7 +412,6 @@ def couple_command(update: Update, context: CallbackContext):
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
-# ==================== برترین‌های ماه ====================
 def monthly_top_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     members = get_members(chat_id)
@@ -380,7 +433,6 @@ def monthly_top_command(update: Update, context: CallbackContext):
     
     update.message.reply_text(msg)
 
-# ==================== اعلام برنده ماه با AI ====================
 def announce_monthly_winners(chat_id, bot):
     monthly_scores = get_all_monthly_scores(chat_id)
     
@@ -435,43 +487,6 @@ def schedule_monthly_announcement(dispatcher):
         context=dispatcher
     )
 
-# ==================== دستور /ask ====================
-def ask_command(update: Update, context: CallbackContext):
-    """دستور /ask برای پرسش سوال از هوش مصنوعی"""
-    user_message = ' '.join(context.args)
-    
-    if not user_message:
-        update.message.reply_text(
-            "❌ لطفاً سوال خود را بعد از /ask بنویسید.\n"
-            "مثال: /ask بهترین فیلم تاریخ چیست؟"
-        )
-        return
-    
-    loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
-    
-    try:
-        ai_response = get_ai_response(user_message)
-        
-        if ai_response:
-            # اگه پاسخ خیلی طولانی بود، به چند بخش تقسیم کن
-            if len(ai_response) > 4000:
-                parts = [ai_response[i:i+4000] for i in range(0, len(ai_response), 4000)]
-                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی (بخش ۱ از {len(parts)}):\n\n{parts[0]}")
-                for i, part in enumerate(parts[1:], 2):
-                    update.message.reply_text(f"🤖 پاسخ هوش مصنوعی (بخش {i} از {len(parts)}):\n\n{part}")
-            else:
-                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
-        else:
-            loading_msg.edit_text(
-                "❌ خطا در دریافت پاسخ.\n"
-                "لطفاً چند دقیقه دیگر تلاش کنید یا سوال خود را کوتاه‌تر کنید."
-            )
-            
-    except Exception as e:
-        logger.error(f"❌ خطا در /ask: {e}")
-        loading_msg.edit_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
-
-# ==================== بقیه دستورات ====================
 def addgroup_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     logger.info(f"📌 تلاش برای افزودن گروه: {chat_id}")
@@ -609,7 +624,6 @@ def reset_command(update: Update, context: CallbackContext):
     clear_data()
     update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
-# ==================== AI Message Handler ====================
 def ai_response(text):
     text_lower = text.lower()
     
@@ -647,7 +661,6 @@ def handle_ai_message(update: Update, context: CallbackContext):
     except Exception as e:
         logger.error(f"❌ خطا در handle_ai_message: {e}")
 
-# ==================== کار روزانه (با ریست خودکار) ====================
 def daily_job(context: CallbackContext):
     chat_id = context.job.context
     bot = context.bot
@@ -658,13 +671,11 @@ def daily_job(context: CallbackContext):
         bot.send_message(chat_id=chat_id, text="❌ خطا در دریافت لیست اعضا.")
         return
     
-    # ===== بررسی و ریست خودکار لیست سیاه =====
     check_and_reset_blocked(chat_id)
     
     blocked = get_blocked_users(chat_id)
     available_members = [m for m in members if m["id"] not in blocked]
     
-    # اگه تعداد قابل انتخاب کم بود، ریست کن
     if len(available_members) < 2:
         check_and_reset_blocked(chat_id)
         blocked = get_blocked_users(chat_id)
@@ -702,7 +713,6 @@ def daily_job(context: CallbackContext):
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
 
-# ==================== زمان‌بندی ====================
 def schedule_daily_jobs(dispatcher):
     job_queue = dispatcher.job_queue
     if not job_queue:
@@ -718,29 +728,23 @@ def schedule_daily_jobs(dispatcher):
         job_queue.run_repeating(daily_job, interval=86400, first=10, context=chat_id)
         logger.info(f"✅ کار روزانه برای گروه {chat_id} تنظیم شد.")
 
-# ==================== اجرا ====================
 def main():
-    # ===== کلین استارت =====
-    # اجرای Flask
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
     
-    # ===== راه‌اندازی ربات =====
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
-    # ===== اضافه کردن کلین استارت =====
     try:
-        # پاک کردن Webhookهای قبلی
         updater.bot.delete_webhook()
         logger.info("✅ Webhook قبلی پاک شد.")
     except Exception as e:
         logger.warning(f"⚠️ خطا در پاک کردن Webhook: {e}")
     
-    # ===== دستورات =====
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("ask", ask_command))
+    dp.add_handler(CommandHandler("clear_history", clear_history_command))
     dp.add_handler(CommandHandler("setgender", setgender_command))
     dp.add_handler(CommandHandler("setinterest", setinterest_command))
     dp.add_handler(CommandHandler("addgroup", addgroup_command))
@@ -754,15 +758,12 @@ def main():
     dp.add_handler(CommandHandler("monthly_top", monthly_top_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
-    # ===== Callback و Message Handler =====
     dp.add_handler(CallbackQueryHandler(button_callback))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
-    # ===== زمان‌بندی‌ها =====
     schedule_daily_jobs(dp)
     schedule_monthly_announcement(dp)
     
-    # ===== شروع ربات =====
     logger.info("🚀 ربات شروع به کار کرد...")
     updater.start_polling(drop_pending_updates=True, timeout=20)
     updater.idle()
