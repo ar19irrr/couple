@@ -129,9 +129,9 @@ def update_members_sync(chat_id):
 def get_daily_fortune():
     return random.choice(FORTUNES)
 
-# ==================== هوش مصنوعی (OpenRouter) ====================
+# ==================== هوش مصنوعی (OpenRouter) - بهینه شده ====================
 def get_ai_response(prompt):
-    """دریافت پاسخ از هوش مصنوعی با OpenRouter"""
+    """دریافت پاسخ از هوش مصنوعی با OpenRouter (سریع‌تر)"""
     try:
         from openai import OpenAI
         
@@ -146,9 +146,9 @@ def get_ai_response(prompt):
         )
         
         response = client.chat.completions.create(
-            model="deepseek/deepseek-v4-flash",  # مدل اصلاح شده
+            model="google/gemma-4-31b-it:free",  # مدل سریع‌تر از DeepSeek
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=500
+            max_tokens=200  # کاهش یافته برای سرعت بیشتر
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -396,9 +396,9 @@ def schedule_monthly_announcement(dispatcher):
         context=dispatcher
     )
 
-# ==================== دستور /ask ====================
+# ==================== دستور /ask (بهینه شده) ====================
 def ask_command(update: Update, context: CallbackContext):
-    """دستور /ask برای پرسش سوال از هوش مصنوعی"""
+    """دستور /ask با پاسخ سریع‌تر"""
     user_message = ' '.join(context.args)
     
     if not user_message:
@@ -411,12 +411,31 @@ def ask_command(update: Update, context: CallbackContext):
     loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
     
     try:
-        ai_response = get_ai_response(user_message)
+        from openai import OpenAI
+        
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            loading_msg.edit_text("❌ کلید API تنظیم نشده است!")
+            return
+        
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
+        
+        response = client.chat.completions.create(
+            model="google/gemma-4-31b-it:free",  # مدل سریع‌تر
+            messages=[{"role": "user", "content": user_message}],
+            max_tokens=200,  # کاهش یافته برای سرعت
+            stream=False
+        )
+        
+        ai_response = response.choices[0].message.content
         
         if ai_response:
             loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
         else:
-            loading_msg.edit_text("❌ خطا در ارتباط با هوش مصنوعی. لطفاً دوباره تلاش کنید.")
+            loading_msg.edit_text("❌ پاسخ خالی دریافت شد!")
             
     except Exception as e:
         logger.error(f"❌ خطا در /ask: {e}")
@@ -706,7 +725,7 @@ def main():
     
     # ===== شروع ربات =====
     logger.info("🚀 ربات شروع به کار کرد...")
-    updater.start_polling(drop_pending_updates=True, timeout=30)
+    updater.start_polling(drop_pending_updates=True, timeout=20)  # کاهش timeout
     updater.idle()
 
 if __name__ == "__main__":
