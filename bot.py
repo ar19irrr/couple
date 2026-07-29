@@ -145,7 +145,7 @@ def get_ai_response(prompt):
         response = client.chat.completions.create(
             model="deepseek/deepseek-v4-flash:free",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=100
+            max_tokens=500
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -155,9 +155,12 @@ def get_ai_response(prompt):
 # ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
     update.message.reply_text(
-        """🤖 ربات زوج‌یاب پیشرفته
+        """🤖 ربات زوج‌یاب پیشرفته با هوش مصنوعی
 
-📌 دستورات:
+📌 **دستورات جدید:**
+/ask <سوال> - پرسش سوال از هوش مصنوعی 🧠
+
+📌 **دستورات اصلی:**
 /start - این پیام
 /setgender - تنظیم جنسیت
 /setinterest - تنظیم علاقه
@@ -171,15 +174,17 @@ def start(update: Update, context: CallbackContext):
 /monthly_top - برترین‌های ماه
 /reset - ریست دیتابیس
 
-✨ امکانات ویژه:
+✨ **امکانات ویژه:**
 • انتخاب زوج بر اساس جنسیت و علایق
 • فال روزانه
 • سیستم امتیازدهی ماهانه
-• اعلام برنده ماه با هوش مصنوعی
+• **پرسش و پاسخ با هوش مصنوعی** 🧠
 
-⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
+⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد.""",
+        parse_mode="Markdown"
     )
 
+# ==================== تنظیم جنسیت ====================
 def setgender_command(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton("👨 مرد", callback_data="gender_male")],
@@ -193,6 +198,7 @@ def setgender_command(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
+# ==================== تنظیم علاقه ====================
 def setinterest_command(update: Update, context: CallbackContext):
     keyboard = []
     for key, value in INTERESTS.items():
@@ -208,6 +214,7 @@ def setinterest_command(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
+# ==================== پردازش دکمه‌ها ====================
 def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
@@ -283,7 +290,7 @@ def couple_command(update: Update, context: CallbackContext):
     user1, user2 = selected[0], selected[1]
     save_couple(chat_id, user1, user2)
     
-    # ===== امتیاز ماهانه =====
+    # امتیاز ماهانه
     update_monthly_score(chat_id, user1["id"])
     update_monthly_score(chat_id, user2["id"])
     
@@ -347,7 +354,7 @@ def announce_monthly_winners(chat_id, bot):
     user_map = {m["id"]: m for m in members}
     top_user = user_map.get(int(top_user_id), {"name": "کاربر ناشناس"})
     
-    # ===== پیام با AI =====
+    # پیام با AI
     try:
         ai_prompt = f"یک پیام تبریک عاشقانه و شاد برای {top_user['name']} بنویس که برنده لاورهای ماه شده با {top_score} بار لاور شدن. پیام باید کوتاه، احساسی و پر از انرژی مثبت باشه."
         ai_message = get_ai_response(ai_prompt)
@@ -392,6 +399,37 @@ def schedule_monthly_announcement(dispatcher):
         when=time_until_next_month,
         context=dispatcher
     )
+
+# ==================== دستور /ask (پرسش از AI) ====================
+def ask_command(update: Update, context: CallbackContext):
+    """دستور /ask برای پرسش سوال از هوش مصنوعی"""
+    # دریافت متن سوال از کاربر
+    user_message = ' '.join(context.args)
+    
+    if not user_message:
+        update.message.reply_text(
+            "❌ لطفاً سوال خود را بعد از /ask بنویسید.\n"
+            "مثال: `/ask بهترین فیلم تاریخ چیست؟`",
+            parse_mode="Markdown"
+        )
+        return
+    
+    # ارسال پیام "در حال پردازش..."
+    loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
+    
+    try:
+        # دریافت پاسخ از OpenRouter
+        ai_response = get_ai_response(user_message)
+        
+        if ai_response:
+            # پاسخ موفق
+            loading_msg.edit_text(f"🤖 **پاسخ هوش مصنوعی:**\n\n{ai_response}", parse_mode="Markdown")
+        else:
+            loading_msg.edit_text("❌ خطا در ارتباط با هوش مصنوعی. لطفاً دوباره تلاش کنید.")
+            
+    except Exception as e:
+        logger.error(f"❌ خطا در /ask: {e}")
+        loading_msg.edit_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
 
 # ==================== بقیه دستورات ====================
 def addgroup_command(update: Update, context: CallbackContext):
@@ -531,7 +569,7 @@ def reset_command(update: Update, context: CallbackContext):
     clear_data()
     update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
-# ==================== AI Message Handler ====================
+# ==================== AI Message Handler (پاسخ‌های سریع) ====================
 def ai_response(text):
     text_lower = text.lower()
     
@@ -631,7 +669,9 @@ def main():
     updater = Updater(token=config.BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
+    # دستورات
     dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("ask", ask_command))  # <--- دستور جدید
     dp.add_handler(CommandHandler("setgender", setgender_command))
     dp.add_handler(CommandHandler("setinterest", setinterest_command))
     dp.add_handler(CommandHandler("addgroup", addgroup_command))
@@ -645,9 +685,11 @@ def main():
     dp.add_handler(CommandHandler("monthly_top", monthly_top_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
+    # Callback و Message Handler
     dp.add_handler(CallbackQueryHandler(button_callback))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
+    # زمان‌بندی‌ها
     schedule_daily_jobs(dp)
     schedule_monthly_announcement(dp)
     
