@@ -3,7 +3,7 @@ import random
 import threading
 import asyncio
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -21,6 +21,9 @@ from database import (
     check_and_reset_blocked, sync_groups, load_data
 )
 from member_fetcher import get_all_members
+
+# ==================== تقویم شمسی ====================
+from rokh import get_today_events, get_events, DateSystem
 
 # ==================== Flask ====================
 app = Flask(__name__)
@@ -188,6 +191,7 @@ def start(update: Update, context: CallbackContext):
 
 📌 دستورات سریع:
 /ask <سوال> - پرسش از هوش مصنوعی 🧠
+/event - مناسبت‌های امروز 📅
 /couple - انتخاب زوج تصادفی 💞
 /stats - آمار گروه 📊
 /mystats - آمار شخصی شما 👤
@@ -232,6 +236,13 @@ def help_command(update: Update, context: CallbackContext):
 📌 /clear_history - پاک کردن تاریخچه مکالمه
 
 ━━━━━━━━━━━━━━━━━━━━━
+📅 بخش تقویم و مناسبت‌ها
+━━━━━━━━━━━━━━━━━━━━━
+
+📌 /event - نمایش مناسبت‌های امروز
+📌 /event 1405/1/1 - نمایش مناسبت‌های تاریخ مشخص
+
+━━━━━━━━━━━━━━━━━━━━━
 ⚙️ تنظیمات پروفایل
 ━━━━━━━━━━━━━━━━━━━━━
 
@@ -259,6 +270,87 @@ def help_command(update: Update, context: CallbackContext):
 🎉 ربات شما کامل است! لذت ببرید!
     """
     update.message.reply_text(help_text)
+
+# ==================== دستور /event (تقویم شمسی) ====================
+def event_command(update: Update, context: CallbackContext):
+    """نمایش مناسبت‌های امروز یا یک تاریخ خاص"""
+    user_message = ' '.join(context.args)
+    
+    try:
+        if user_message:
+            # اگر کاربر تاریخ وارد کرده بود (مثلاً 1405/1/1)
+            parts = user_message.split('/')
+            if len(parts) == 3:
+                year = int(parts[0])
+                month = int(parts[1])
+                day = int(parts[2])
+                events_data = get_events(
+                    day=day, 
+                    month=month, 
+                    year=year, 
+                    input_date_system=DateSystem.JALALI
+                )
+                date_str = f"{year}/{month}/{day}"
+            else:
+                update.message.reply_text("❌ فرمت تاریخ اشتباه است. مثال: /event 1405/1/1")
+                return
+        else:
+            # دریافت مناسبت‌های امروز
+            events_data = get_today_events()
+            # تاریخ امروز را از خروجی بگیریم
+            jalali_date = events_data.get('jalali_date', {})
+            date_str = f"{jalali_date.get('year', '')}/{jalali_date.get('month', '')}/{jalali_date.get('day', '')}"
+        
+        # پردازش خروجی
+        events = events_data.get('events', {})
+        is_holiday = events_data.get('is_holiday', False)
+        
+        msg = f"📅 **تقویم روز {date_str}**\n\n"
+        
+        # مناسبت‌های شمسی
+        jalali_events = events.get('jalali', [])
+        if jalali_events:
+            msg += "🟢 **مناسبت‌های شمسی:**\n"
+            for e in jalali_events:
+                desc = e.get('description', '')
+                is_holiday_event = e.get('is_holiday', False)
+                holiday_tag = "🔴 (تعطیل)" if is_holiday_event else ""
+                msg += f"  • {desc} {holiday_tag}\n"
+            msg += "\n"
+        
+        # مناسبت‌های میلادی
+        gregorian_events = events.get('gregorian', [])
+        if gregorian_events:
+            msg += "🔵 **مناسبت‌های میلادی:**\n"
+            for e in gregorian_events:
+                desc = e.get('description', '')
+                is_holiday_event = e.get('is_holiday', False)
+                holiday_tag = "🔴 (تعطیل)" if is_holiday_event else ""
+                msg += f"  • {desc} {holiday_tag}\n"
+            msg += "\n"
+        
+        # مناسبت‌های هجری
+        hijri_events = events.get('hijri', [])
+        if hijri_events:
+            msg += "🟡 **مناسبت‌های هجری قمری:**\n"
+            for e in hijri_events:
+                desc = e.get('description', '')
+                is_holiday_event = e.get('is_holiday', False)
+                holiday_tag = "🔴 (تعطیل)" if is_holiday_event else ""
+                msg += f"  • {desc} {holiday_tag}\n"
+            msg += "\n"
+        
+        if is_holiday:
+            msg += "🎉 **امروز تعطیل رسمی است!** 🎉"
+        
+        if not jalali_events and not gregorian_events and not hijri_events:
+            msg += "📭 هیچ مناسبت خاصی برای این تاریخ ثبت نشده است."
+        
+        update.message.reply_text(msg, parse_mode="Markdown")
+        
+    except Exception as e:
+        logger.error(f"❌ خطا در /event: {e}")
+        update.message.reply_text("❌ خطا در دریافت مناسبت‌ها. لطفاً دوباره تلاش کنید.")
 
 def ask_command(update: Update, context: CallbackContext):
     user_message = ' '.join(context.args)
@@ -720,11 +812,9 @@ def owner_stats_command(update: Update, context: CallbackContext):
         update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
         return
     
-    # همگام‌سازی گروه‌ها
     groups = sync_groups()
     data = load_data()
     
-    # جمع‌آوری آمار
     total_users = set()
     for chat_id in groups:
         members = get_members(chat_id)
@@ -735,7 +825,6 @@ def owner_stats_command(update: Update, context: CallbackContext):
     msg += f"👥 تعداد گروه‌های فعال: {len(groups)} گروه\n"
     msg += f"👤 تعداد کل کاربران ثبت‌شده: {len(total_users)} نفر\n"
     
-    # دریافت تعداد کل زوج‌ها
     total_couples = 0
     for chat_id in groups:
         history = get_couple_history(chat_id, 1000)
@@ -920,6 +1009,7 @@ def main():
     
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
+    dp.add_handler(CommandHandler("event", event_command))
     dp.add_handler(CommandHandler("ask", ask_command))
     dp.add_handler(CommandHandler("clear_history", clear_history_command))
     dp.add_handler(CommandHandler("setgender", setgender_command))
