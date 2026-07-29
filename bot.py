@@ -44,8 +44,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ==================== شناسه مالک ربات ====================
-OWNER_ID = 1095925103  # <--- شناسه شما
+OWNER_ID = 1095925103
 
 # ==================== پیام‌ها ====================
 COUPLE_MESSAGES = [
@@ -72,7 +71,6 @@ JOKE_MESSAGES = [
     "دنیا رو به هم ببافید و عاشق باشید 🌍❤️"
 ]
 
-# ==================== فال‌های روزانه ====================
 FORTUNES = [
     "🌟 امروز روز عشق و مهربانی است!",
     "🌹 عشق در هواست... نفس عمیق بکش!",
@@ -86,7 +84,6 @@ FORTUNES = [
     "💖 امروز روزی است که عشق واقعی را پیدا می‌کنی!"
 ]
 
-# ==================== علایق ====================
 INTERESTS = {
     "music": {"emoji": "🎵", "label": "موسیقی"},
     "movie": {"emoji": "🎬", "label": "سینما و فیلم"},
@@ -104,7 +101,6 @@ GENDERS = {
     "other": "🌈 سایر"
 }
 
-# ==================== تابع دریافت اعضا ====================
 def update_members_sync(chat_id):
     try:
         logger.info(f"🔄 شروع دریافت اعضا برای گروه {chat_id}")
@@ -133,9 +129,7 @@ def update_members_sync(chat_id):
 def get_daily_fortune():
     return random.choice(FORTUNES)
 
-# ==================== هوش مصنوعی با تاریخچه ====================
 def get_ai_response_with_history(history):
-    """دریافت پاسخ از هوش مصنوعی با تاریخچه مکالمه"""
     try:
         from openai import OpenAI
         
@@ -182,96 +176,91 @@ def get_ai_response_with_history(history):
         return None
 
 def get_ai_response(prompt):
-    """دریافت پاسخ از هوش مصنوعی (بدون تاریخچه)"""
     history = [{"role": "user", "content": prompt}]
     return get_ai_response_with_history(history)
 
 # ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
     update.message.reply_text(
-        """🤖 **ربات زوج‌یاب پیشرفته با هوش مصنوعی**
+        """🤖 ربات زوج‌یاب پیشرفته با هوش مصنوعی
 
 📌 برای مشاهده راهنمای کامل دستورات، از دستور /help استفاده کنید.
 
-📌 **دستورات سریع:**
+📌 دستورات سریع:
 /ask <سوال> - پرسش از هوش مصنوعی 🧠
 /couple - انتخاب زوج تصادفی 💞
 /stats - آمار گروه 📊
 /mystats - آمار شخصی شما 👤
 /monthly_top - برترین‌های ماه 🏆
 
-⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد.""",
-        parse_mode="Markdown"
+⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
     )
 
 def help_command(update: Update, context: CallbackContext):
-    """نمایش راهنمای کامل ربات"""
     help_text = """
-📖 **راهنمای کامل ربات زوج‌یاب + هوش مصنوعی**
+📖 راهنمای کامل ربات زوج‌یاب + هوش مصنوعی
 
 ━━━━━━━━━━━━━━━━━━━━━
-🤖 **دستورات عمومی**
+🤖 دستورات عمومی
 ━━━━━━━━━━━━━━━━━━━━━
 
-📌 `/start` - نمایش این پیام
-📌 `/help` - نمایش راهنمای کامل
+📌 /start - نمایش این پیام
+📌 /help - نمایش راهنمای کامل
 
 ━━━━━━━━━━━━━━━━━━━━━
-🎯 **بخش زوج‌یابی**
+🎯 بخش زوج‌یابی
 ━━━━━━━━━━━━━━━━━━━━━
 
-📌 `/couple` - انتخاب یک زوج تصادفی
-📌 `/count` - تعداد اعضای گروه
-📌 `/last` - آخرین زوج انتخاب شده
-📌 `/history` - تاریخچه ۱۰ زوج آخر
-📌 `/stats` - آمار کلی گروه
-📌 `/mystats` - آمار شخصی شما
-📌 `/monthly_top` - برترین‌های ماه
+📌 /couple - انتخاب یک زوج تصادفی
+📌 /count - تعداد اعضای گروه
+📌 /last - آخرین زوج انتخاب شده
+📌 /history - تاریخچه ۱۰ زوج آخر
+📌 /stats - آمار کلی گروه
+📌 /mystats - آمار شخصی شما
+📌 /monthly_top - برترین‌های ماه
 
 ━━━━━━━━━━━━━━━━━━━━━
-🧠 **بخش هوش مصنوعی**
+🧠 بخش هوش مصنوعی
 ━━━━━━━━━━━━━━━━━━━━━
 
-📌 `/ask <سوال>` - پرسش سوال از هوش مصنوعی
-   مثال: `/ask بهترین فیلم تاریخ چیست؟`
+📌 /ask <سوال> - پرسش سوال از هوش مصنوعی
+   مثال: /ask بهترین فیلم تاریخ چیست؟
 
-📌 **ریپلی کنید** - روی پیام ربات ریپلی کنید
+📌 ریپلی کنید - روی پیام ربات ریپلی کنید
    تا مکالمه ادامه پیدا کند (بدون نیاز به /ask)
 
-📌 `/clear_history` - پاک کردن تاریخچه مکالمه
+📌 /clear_history - پاک کردن تاریخچه مکالمه
 
 ━━━━━━━━━━━━━━━━━━━━━
-⚙️ **تنظیمات پروفایل**
+⚙️ تنظیمات پروفایل
 ━━━━━━━━━━━━━━━━━━━━━
 
-📌 `/setgender` - تنظیم جنسیت (با دکمه)
-📌 `/setinterest` - تنظیم علاقه (با دکمه)
+📌 /setgender - تنظیم جنسیت (با دکمه)
+📌 /setinterest - تنظیم علاقه (با دکمه)
 
 ━━━━━━━━━━━━━━━━━━━━━
-🔧 **مدیریت گروه (فقط ادمین)**
+🔧 مدیریت گروه (فقط ادمین)
 ━━━━━━━━━━━━━━━━━━━━━
 
-📌 `/addgroup` - فعال کردن ربات در این گروه
-📌 `/reset` - ریست کامل دیتابیس
+📌 /addgroup - فعال کردن ربات در این گروه
+📌 /reset - ریست کامل دیتابیس
 
 ━━━━━━━━━━━━━━━━━━━━━
-💡 **نکات مهم**
+💡 نکات مهم
 ━━━━━━━━━━━━━━━━━━━━━
 
-✅ ربات باید **ادمین** گروه باشد
-✅ برای دریافت اعضا و AI، **VPN** روشن باشد
-✅ هر کاربر بعد از لاور شدن، **۷ روز** در لیست سیاه می‌رود
-✅ با تمام شدن اعضا، لیست سیاه **خودکار ریست** می‌شود
-✅ هوش مصنوعی **۱۰ پیام آخر** را به خاطر می‌سپارد
+✅ ربات باید ادمین گروه باشد
+✅ برای دریافت اعضا و AI، VPN روشن باشد
+✅ هر کاربر بعد از لاور شدن، ۷ روز در لیست سیاه می‌رود
+✅ با تمام شدن اعضا، لیست سیاه خودکار ریست می‌شود
+✅ هوش مصنوعی ۱۰ پیام آخر را به خاطر می‌سپارد
 
 ━━━━━━━━━━━━━━━━━━━━━
-🎉 **ربات شما کامل است! لذت ببرید!**
+🎉 ربات شما کامل است! لذت ببرید!
     """
-    update.message.reply_text(help_text, parse_mode="Markdown")
+    update.message.reply_text(help_text)
 
-# ==================== دستور /ask ====================
 def ask_command(update: Update, context: CallbackContext):
-    """دستور /ask با پشتیبانی از ریپلی و تاریخچه"""
     user_message = ' '.join(context.args)
     reply_to_message = update.message.reply_to_message
     
@@ -322,9 +311,7 @@ def ask_command(update: Update, context: CallbackContext):
         logger.error(f"❌ خطا در /ask: {e}")
         loading_msg.edit_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
 
-# ==================== پاسخ خودکار به ریپلی‌ها ====================
 def handle_reply(update: Update, context: CallbackContext):
-    """پاسخ خودکار به ریپلی‌ها (بدون نیاز به /ask)"""
     try:
         if not update.message.reply_to_message:
             return
@@ -372,12 +359,10 @@ def handle_reply(update: Update, context: CallbackContext):
         logger.error(f"❌ خطا در handle_reply: {e}")
         update.message.reply_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
 
-# ==================== پاک کردن تاریخچه ====================
 def clear_history_command(update: Update, context: CallbackContext):
     context.user_data["chat_history"] = []
     update.message.reply_text("✅ تاریخچه مکالمه پاک شد!")
 
-# ==================== تنظیم جنسیت ====================
 def setgender_command(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton("👨 مرد", callback_data="gender_male")],
@@ -391,7 +376,6 @@ def setgender_command(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
-# ==================== تنظیم علاقه ====================
 def setinterest_command(update: Update, context: CallbackContext):
     keyboard = []
     for key, value in INTERESTS.items():
@@ -407,7 +391,6 @@ def setinterest_command(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
-# ==================== پردازش دکمه‌ها ====================
 def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
@@ -428,7 +411,6 @@ def button_callback(update: Update, context: CallbackContext):
         interest_label = INTERESTS.get(interest, {}).get("label", interest)
         query.edit_message_text(f"✅ علاقه شما به {interest_label} تنظیم شد!")
 
-# ==================== انتخاب زوج ====================
 def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال انتخاب زوج...")
@@ -517,7 +499,6 @@ def couple_command(update: Update, context: CallbackContext):
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
-# ==================== برترین‌های ماه ====================
 def monthly_top_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     members = get_members(chat_id)
@@ -539,7 +520,6 @@ def monthly_top_command(update: Update, context: CallbackContext):
     
     update.message.reply_text(msg)
 
-# ==================== اعلام برنده ماه با AI ====================
 def announce_monthly_winners(chat_id, bot):
     monthly_scores = get_all_monthly_scores(chat_id)
     
@@ -594,7 +574,6 @@ def schedule_monthly_announcement(dispatcher):
         context=dispatcher
     )
 
-# ==================== بقیه دستورات ====================
 def addgroup_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     logger.info(f"📌 تلاش برای افزودن گروه: {chat_id}")
@@ -734,25 +713,19 @@ def reset_command(update: Update, context: CallbackContext):
 
 # ==================== دستورات ویژه مالک ====================
 def owner_stats_command(update: Update, context: CallbackContext):
-    """آمار ربات برای مالک (فقط OWNER_ID)"""
     user_id = update.effective_user.id
     
     if user_id != OWNER_ID:
         update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
         return
     
-    # دریافت لیست گروه‌ها
     groups = get_groups()
     
-    # دریافت لیست کاربرانی که ربات رو استارت کردن (از دیتابیس)
-    # برای این کار باید توی دیتابیس یک بخش برای ذخیره کاربران اضافه کنیم
-    # فعلاً از دیتابیس موجود استفاده میکنیم
-    
-    msg = f"📊 **آمار کلی ربات**\n\n"
+    msg = f"📊 آمار کلی ربات\n\n"
     msg += f"👥 تعداد گروه‌های فعال: {len(groups)} گروه\n"
     
     if groups:
-        msg += f"\n📌 **لیست گروه‌های فعال:**\n"
+        msg += f"\n📌 لیست گروه‌های فعال:\n"
         for i, chat_id in enumerate(groups, 1):
             try:
                 chat = context.bot.get_chat(chat_id)
@@ -761,26 +734,20 @@ def owner_stats_command(update: Update, context: CallbackContext):
             except:
                 msg += f"{i}. گروه ناشناس (ID: {chat_id})\n"
     
-    # تعداد کاربران (از تاریخچه زوج‌ها)
-    # این بخش رو می‌تونیم با اضافه کردن یک دیتابیس جداگانه برای کاربران کاملتر کنیم
-    
-    update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg)
 
 def owner_users_command(update: Update, context: CallbackContext):
-    """لیست کاربرانی که ربات رو استارت کردن (فقط مالک)"""
     user_id = update.effective_user.id
     
     if user_id != OWNER_ID:
         update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
         return
     
-    # اینجا باید از دیتابیس کاربران رو بخونی
-    # فعلاً یک پیام نمونه می‌فرستیم
-    msg = "👥 **لیست کاربرانی که ربات رو استارت کردن:**\n\n"
+    msg = "👥 لیست کاربرانی که ربات رو استارت کردن:\n\n"
     msg += "🔹 برای ذخیره کاربران، باید یک دیتابیس جداگانه برای کاربران اضافه کنید.\n"
     msg += "🔹 در حال حاضر، اطلاعات کاربران در تاریخچه زوج‌ها موجود است."
     
-    update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg)
 
 # ==================== AI Message Handler ====================
 def ai_response(text):
@@ -873,7 +840,6 @@ def daily_job(context: CallbackContext):
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
 
-# ==================== زمان‌بندی ====================
 def schedule_daily_jobs(dispatcher):
     job_queue = dispatcher.job_queue
     if not job_queue:
@@ -904,10 +870,8 @@ def main():
     except Exception as e:
         logger.warning(f"⚠️ خطا در پاک کردن Webhook: {e}")
     
-    # ===== اول: Handler برای ریپلی خودکار =====
     dp.add_handler(MessageHandler(Filters.text & Filters.reply, handle_reply))
     
-    # ===== دوم: دستورات =====
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("ask", ask_command))
@@ -925,13 +889,10 @@ def main():
     dp.add_handler(CommandHandler("monthly_top", monthly_top_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
-    # ===== دستورات ویژه مالک =====
     dp.add_handler(CommandHandler("owner_stats", owner_stats_command))
     dp.add_handler(CommandHandler("owner_users", owner_users_command))
     
     dp.add_handler(CallbackQueryHandler(button_callback))
-    
-    # ===== سوم: MessageHandler برای پیام‌های عادی =====
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
     schedule_daily_jobs(dp)
