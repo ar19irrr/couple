@@ -44,6 +44,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ==================== شناسه مالک ربات ====================
+OWNER_ID = 1095925103  # <--- شناسه شما
+
 # ==================== پیام‌ها ====================
 COUPLE_MESSAGES = [
     "💞 زوج جذاب امروز 💞",
@@ -729,6 +732,56 @@ def reset_command(update: Update, context: CallbackContext):
     clear_data()
     update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
+# ==================== دستورات ویژه مالک ====================
+def owner_stats_command(update: Update, context: CallbackContext):
+    """آمار ربات برای مالک (فقط OWNER_ID)"""
+    user_id = update.effective_user.id
+    
+    if user_id != OWNER_ID:
+        update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
+        return
+    
+    # دریافت لیست گروه‌ها
+    groups = get_groups()
+    
+    # دریافت لیست کاربرانی که ربات رو استارت کردن (از دیتابیس)
+    # برای این کار باید توی دیتابیس یک بخش برای ذخیره کاربران اضافه کنیم
+    # فعلاً از دیتابیس موجود استفاده میکنیم
+    
+    msg = f"📊 **آمار کلی ربات**\n\n"
+    msg += f"👥 تعداد گروه‌های فعال: {len(groups)} گروه\n"
+    
+    if groups:
+        msg += f"\n📌 **لیست گروه‌های فعال:**\n"
+        for i, chat_id in enumerate(groups, 1):
+            try:
+                chat = context.bot.get_chat(chat_id)
+                chat_name = chat.title or chat.first_name or "گروه ناشناس"
+                msg += f"{i}. {chat_name} (ID: {chat_id})\n"
+            except:
+                msg += f"{i}. گروه ناشناس (ID: {chat_id})\n"
+    
+    # تعداد کاربران (از تاریخچه زوج‌ها)
+    # این بخش رو می‌تونیم با اضافه کردن یک دیتابیس جداگانه برای کاربران کاملتر کنیم
+    
+    update.message.reply_text(msg, parse_mode="Markdown")
+
+def owner_users_command(update: Update, context: CallbackContext):
+    """لیست کاربرانی که ربات رو استارت کردن (فقط مالک)"""
+    user_id = update.effective_user.id
+    
+    if user_id != OWNER_ID:
+        update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
+        return
+    
+    # اینجا باید از دیتابیس کاربران رو بخونی
+    # فعلاً یک پیام نمونه می‌فرستیم
+    msg = "👥 **لیست کاربرانی که ربات رو استارت کردن:**\n\n"
+    msg += "🔹 برای ذخیره کاربران، باید یک دیتابیس جداگانه برای کاربران اضافه کنید.\n"
+    msg += "🔹 در حال حاضر، اطلاعات کاربران در تاریخچه زوج‌ها موجود است."
+    
+    update.message.reply_text(msg, parse_mode="Markdown")
+
 # ==================== AI Message Handler ====================
 def ai_response(text):
     text_lower = text.lower()
@@ -871,6 +924,10 @@ def main():
     dp.add_handler(CommandHandler("mystats", mystats_command))
     dp.add_handler(CommandHandler("monthly_top", monthly_top_command))
     dp.add_handler(CommandHandler("reset", reset_command))
+    
+    # ===== دستورات ویژه مالک =====
+    dp.add_handler(CommandHandler("owner_stats", owner_stats_command))
+    dp.add_handler(CommandHandler("owner_users", owner_users_command))
     
     dp.add_handler(CallbackQueryHandler(button_callback))
     
