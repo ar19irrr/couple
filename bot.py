@@ -129,9 +129,9 @@ def update_members_sync(chat_id):
 def get_daily_fortune():
     return random.choice(FORTUNES)
 
-# ==================== هوش مصنوعی (فقط DeepSeek) ====================
+# ==================== هوش مصنوعی (DeepSeek) با پشتیبانی از پاسخ‌های طولانی ====================
 def get_ai_response(prompt):
-    """دریافت پاسخ از هوش مصنوعی با DeepSeek"""
+    """دریافت پاسخ از هوش مصنوعی با DeepSeek - بهینه شده برای پاسخ‌های طولانی"""
     try:
         from openai import OpenAI
         
@@ -145,10 +145,33 @@ def get_ai_response(prompt):
             base_url="https://openrouter.ai/api/v1"
         )
         
+        # تلاش اول با توکن بیشتر برای پاسخ‌های طولانی
+        try:
+            response = client.chat.completions.create(
+                model="deepseek/deepseek-v4-flash",
+                messages=[
+                    {"role": "system", "content": "شما یک دستیار هوشمند و دقیق فارسی هستید. به سوالات کاربر به طور کامل، دقیق و مفید پاسخ دهید. اگر اطلاعاتی ندارید، صادقانه بگویید."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=600,
+                temperature=0.7,
+                timeout=25
+            )
+            content = response.choices[0].message.content
+            if content and len(content) > 10:
+                return content
+        except Exception as e:
+            logger.warning(f"⚠️ تلاش اول با توکن بیشتر خطا داد: {e}")
+        
+        # تلاش دوم با توکن کمتر (در صورت خطا)
         response = client.chat.completions.create(
             model="deepseek/deepseek-v4-flash",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,
+            messages=[
+                {"role": "system", "content": "شما یک دستیار هوشمند فارسی هستید. به سوالات کاربر پاسخ دقیق و مختصر دهید."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300,
+            temperature=0.7,
             timeout=15
         )
         return response.choices[0].message.content
@@ -398,7 +421,7 @@ def schedule_monthly_announcement(dispatcher):
         context=dispatcher
     )
 
-# ==================== دستور /ask ====================
+# ==================== دستور /ask (با پشتیبانی از پاسخ‌های طولانی) ====================
 def ask_command(update: Update, context: CallbackContext):
     """دستور /ask برای پرسش سوال از هوش مصنوعی"""
     user_message = ' '.join(context.args)
@@ -416,11 +439,18 @@ def ask_command(update: Update, context: CallbackContext):
         ai_response = get_ai_response(user_message)
         
         if ai_response:
-            loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
+            # اگه پاسخ خیلی طولانی بود، به چند بخش تقسیم کن
+            if len(ai_response) > 4000:
+                parts = [ai_response[i:i+4000] for i in range(0, len(ai_response), 4000)]
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی (بخش ۱ از {len(parts)}):\n\n{parts[0]}")
+                for i, part in enumerate(parts[1:], 2):
+                    update.message.reply_text(f"🤖 پاسخ هوش مصنوعی (بخش {i} از {len(parts)}):\n\n{part}")
+            else:
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
         else:
             loading_msg.edit_text(
                 "❌ خطا در دریافت پاسخ.\n"
-                "لطفاً چند دقیقه دیگر تلاش کنید."
+                "لطفاً چند دقیقه دیگر تلاش کنید یا سوال خود را کوتاه‌تر کنید."
             )
             
     except Exception as e:
