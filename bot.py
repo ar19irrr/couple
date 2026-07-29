@@ -100,6 +100,14 @@ GENDERS = {
     "other": "🌈 سایر"
 }
 
+# ==================== لیست مدل‌های رایگان ====================
+FREE_MODELS = [
+    "deepseek/deepseek-v4-flash",
+    "microsoft/phi-3-mini-4k-instruct:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "mistralai/mistral-7b-instruct:free",
+]
+
 # ==================== تابع دریافت اعضا ====================
 def update_members_sync(chat_id):
     try:
@@ -129,9 +137,9 @@ def update_members_sync(chat_id):
 def get_daily_fortune():
     return random.choice(FORTUNES)
 
-# ==================== هوش مصنوعی (OpenRouter) - بهینه شده ====================
+# ==================== هوش مصنوعی (OpenRouter) با مدیریت خطای 429 ====================
 def get_ai_response(prompt):
-    """دریافت پاسخ از هوش مصنوعی با OpenRouter (سریع‌تر)"""
+    """دریافت پاسخ از هوش مصنوعی با OpenRouter - تلاش با چند مدل"""
     try:
         from openai import OpenAI
         
@@ -145,12 +153,26 @@ def get_ai_response(prompt):
             base_url="https://openrouter.ai/api/v1"
         )
         
-        response = client.chat.completions.create(
-            model="google/gemma-4-31b-it:free",  # مدل سریع‌تر از DeepSeek
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=200  # کاهش یافته برای سرعت بیشتر
-        )
-        return response.choices[0].message.content
+        # تلاش با مدل‌های مختلف
+        for model in FREE_MODELS:
+            try:
+                logger.info(f"🔄 تلاش با مدل: {model}")
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=150,
+                    timeout=15
+                )
+                content = response.choices[0].message.content
+                if content:
+                    logger.info(f"✅ مدل {model} پاسخ داد")
+                    return content
+            except Exception as e:
+                logger.warning(f"⚠️ مدل {model} خطا داد: {e}")
+                continue
+        
+        return None  # اگر همه مدل‌ها خطا دادند
+            
     except Exception as e:
         logger.error(f"❌ خطا در AI: {e}")
         return None
@@ -398,7 +420,7 @@ def schedule_monthly_announcement(dispatcher):
 
 # ==================== دستور /ask (بهینه شده) ====================
 def ask_command(update: Update, context: CallbackContext):
-    """دستور /ask با پاسخ سریع‌تر"""
+    """دستور /ask با مدیریت خطای 429"""
     user_message = ' '.join(context.args)
     
     if not user_message:
@@ -411,31 +433,15 @@ def ask_command(update: Update, context: CallbackContext):
     loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
     
     try:
-        from openai import OpenAI
-        
-        api_key = os.environ.get("OPENROUTER_API_KEY")
-        if not api_key:
-            loading_msg.edit_text("❌ کلید API تنظیم نشده است!")
-            return
-        
-        client = OpenAI(
-            api_key=api_key,
-            base_url="https://openrouter.ai/api/v1"
-        )
-        
-        response = client.chat.completions.create(
-            model="google/gemma-4-31b-it:free",  # مدل سریع‌تر
-            messages=[{"role": "user", "content": user_message}],
-            max_tokens=200,  # کاهش یافته برای سرعت
-            stream=False
-        )
-        
-        ai_response = response.choices[0].message.content
+        ai_response = get_ai_response(user_message)
         
         if ai_response:
             loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
         else:
-            loading_msg.edit_text("❌ پاسخ خالی دریافت شد!")
+            loading_msg.edit_text(
+                "❌ خطا در دریافت پاسخ.\n"
+                "لطفاً چند دقیقه دیگر تلاش کنید یا مدل دیگری را امتحان کنید."
+            )
             
     except Exception as e:
         logger.error(f"❌ خطا در /ask: {e}")
@@ -725,7 +731,7 @@ def main():
     
     # ===== شروع ربات =====
     logger.info("🚀 ربات شروع به کار کرد...")
-    updater.start_polling(drop_pending_updates=True, timeout=20)  # کاهش timeout
+    updater.start_polling(drop_pending_updates=True, timeout=20)
     updater.idle()
 
 if __name__ == "__main__":
