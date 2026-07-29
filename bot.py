@@ -3,7 +3,7 @@ import random
 import threading
 import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timedelta  # <--- اینجا اصلاح شد
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
