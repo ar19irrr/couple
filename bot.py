@@ -341,20 +341,17 @@ def monthly_top_command(update: Update, context: CallbackContext):
 
 # ==================== اعلام برنده ماه با AI ====================
 def announce_monthly_winners(chat_id, bot):
-    """اعلام برنده‌های ماه با پیام هوش مصنوعی"""
     monthly_scores = get_all_monthly_scores(chat_id)
     
     if not monthly_scores:
         return
     
-    # پیدا کردن نفر اول
     top_user_id = max(monthly_scores, key=monthly_scores.get)
     top_score = monthly_scores[top_user_id]
     members = get_members(chat_id)
     user_map = {m["id"]: m for m in members}
     top_user = user_map.get(int(top_user_id), {"name": "کاربر ناشناس"})
     
-    # پیام با AI
     try:
         ai_prompt = f"یک پیام تبریک عاشقانه و شاد برای {top_user['name']} بنویس که برنده لاورهای ماه شده با {top_score} بار لاور شدن. پیام باید کوتاه، احساسی و پر از انرژی مثبت باشه."
         ai_message = get_ai_response(ai_prompt)
@@ -377,19 +374,16 @@ def announce_monthly_winners(chat_id, bot):
     reset_monthly_scores(chat_id)
 
 def monthly_announcement_job(context):
-    """کار اعلام برنده‌های ماه"""
     bot = context.job.context.bot
     groups = get_groups()
     for chat_id in groups:
         announce_monthly_winners(chat_id, bot)
 
 def schedule_monthly_announcement(dispatcher):
-    """تنظیم برنامه برای اعلام برنده‌های ماه"""
     job_queue = dispatcher.job_queue
     if not job_queue:
         return
     
-    # محاسبه زمان تا اول ماه بعد
     now = datetime.now()
     next_month = (now.replace(day=1) + timedelta(days=32)).replace(day=1)
     time_until_next_month = (next_month - now).total_seconds()
@@ -400,10 +394,9 @@ def schedule_monthly_announcement(dispatcher):
         context=dispatcher
     )
 
-# ==================== دستور /ask (پرسش از AI) ====================
+# ==================== دستور /ask ====================
 def ask_command(update: Update, context: CallbackContext):
     """دستور /ask برای پرسش سوال از هوش مصنوعی"""
-    # دریافت متن سوال از کاربر
     user_message = ' '.join(context.args)
     
     if not user_message:
@@ -414,15 +407,12 @@ def ask_command(update: Update, context: CallbackContext):
         )
         return
     
-    # ارسال پیام "در حال پردازش..."
     loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
     
     try:
-        # دریافت پاسخ از OpenRouter
         ai_response = get_ai_response(user_message)
         
         if ai_response:
-            # پاسخ موفق
             loading_msg.edit_text(f"🤖 **پاسخ هوش مصنوعی:**\n\n{ai_response}", parse_mode="Markdown")
         else:
             loading_msg.edit_text("❌ خطا در ارتباط با هوش مصنوعی. لطفاً دوباره تلاش کنید.")
@@ -569,7 +559,7 @@ def reset_command(update: Update, context: CallbackContext):
     clear_data()
     update.message.reply_text("✅ دیتابیس با موفقیت ریست شد.")
 
-# ==================== AI Message Handler (پاسخ‌های سریع) ====================
+# ==================== AI Message Handler (اصلاح شده) ====================
 def ai_response(text):
     text_lower = text.lower()
     
@@ -593,10 +583,21 @@ def ai_response(text):
         return None
 
 def handle_ai_message(update: Update, context: CallbackContext):
-    user_message = update.message.text
-    response = ai_response(user_message)
-    if response:
-        update.message.reply_text(response)
+    """مدیریت پیام‌های هوشمند با بررسی وجود پیام"""
+    try:
+        # بررسی اینکه پیام وجود داره
+        if not update.message:
+            return
+        
+        user_message = update.message.text
+        if not user_message:
+            return
+        
+        response = ai_response(user_message)
+        if response:
+            update.message.reply_text(response)
+    except Exception as e:
+        logger.error(f"❌ خطا در handle_ai_message: {e}")
 
 # ==================== کار روزانه ====================
 def daily_job(context: CallbackContext):
@@ -671,7 +672,7 @@ def main():
     
     # دستورات
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("ask", ask_command))  # <--- دستور جدید
+    dp.add_handler(CommandHandler("ask", ask_command))
     dp.add_handler(CommandHandler("setgender", setgender_command))
     dp.add_handler(CommandHandler("setinterest", setinterest_command))
     dp.add_handler(CommandHandler("addgroup", addgroup_command))
