@@ -188,7 +188,7 @@ def start(update: Update, context: CallbackContext):
     update.message.reply_text(
         """🤖 ربات زوج‌یاب پیشرفته با هوش مصنوعی
 
-📌 دستورات جدید:
+📌 دستورات:
 /ask <سوال> - پرسش سوال از هوش مصنوعی 🧠
 /clear_history - پاک کردن تاریخچه مکالمه
 
@@ -243,8 +243,9 @@ def ask_command(update: Update, context: CallbackContext):
         history = context.user_data.get("chat_history", [])
         history.append({"role": "user", "content": user_message})
         
-        if len(history) > 5:
-            history = history[-5:]
+        # ===== افزایش به ۱۰ =====
+        if len(history) > 10:
+            history = history[-10:]
         
         ai_response = get_ai_response_with_history(history)
         
@@ -272,29 +273,36 @@ def ask_command(update: Update, context: CallbackContext):
 # ==================== پاسخ خودکار به ریپلی‌ها ====================
 def handle_reply(update: Update, context: CallbackContext):
     """پاسخ خودکار به ریپلی‌ها (بدون نیاز به /ask)"""
-    # بررسی اینکه پیام ریپلی شده یا نه
-    if not update.message.reply_to_message:
-        return
-    
-    # بررسی اینکه ریپلی به پیام خود ربات هست یا نه
-    if not update.message.reply_to_message.from_user.is_bot:
-        return
-    
-    # دریافت متن ریپلی
-    user_message = update.message.text
-    if not user_message:
-        return
-    
-    loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
-    
     try:
-        user_id = update.effective_user.id
-        history = context.user_data.get("chat_history", [])
+        # بررسی اینکه پیام ریپلی شده یا نه
+        if not update.message.reply_to_message:
+            return
         
+        # بررسی اینکه ریپلی به پیام خود ربات هست یا نه
+        replied_msg = update.message.reply_to_message
+        if not replied_msg.from_user.is_bot:
+            return
+        
+        # بررسی اینکه پیام از خود ربات هست (با یوزرنیم چک کن)
+        bot_username = context.bot.username
+        if replied_msg.from_user.username != bot_username:
+            return
+        
+        # دریافت متن ریپلی
+        user_message = update.message.text
+        if not user_message:
+            return
+        
+        # ===== پاسخ دادن =====
+        loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
+        
+        # دریافت تاریخچه (تا ۱۰ پیام)
+        history = context.user_data.get("chat_history", [])
         history.append({"role": "user", "content": user_message})
         
-        if len(history) > 6:
-            history = history[-6:]
+        # فقط ۱۰ تای آخر رو نگه دار
+        if len(history) > 10:
+            history = history[-10:]
         
         ai_response = get_ai_response_with_history(history)
         
@@ -317,7 +325,7 @@ def handle_reply(update: Update, context: CallbackContext):
             
     except Exception as e:
         logger.error(f"❌ خطا در handle_reply: {e}")
-        loading_msg.edit_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
+        update.message.reply_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
 
 # ==================== پاک کردن تاریخچه ====================
 def clear_history_command(update: Update, context: CallbackContext):
@@ -792,6 +800,10 @@ def main():
     except Exception as e:
         logger.warning(f"⚠️ خطا در پاک کردن Webhook: {e}")
     
+    # ===== اول: Handler برای ریپلی خودکار (اولویت بالا) =====
+    dp.add_handler(MessageHandler(Filters.text & Filters.reply, handle_reply))
+    
+    # ===== دوم: دستورات =====
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("ask", ask_command))
     dp.add_handler(CommandHandler("clear_history", clear_history_command))
@@ -809,10 +821,9 @@ def main():
     dp.add_handler(CommandHandler("reset", reset_command))
     
     dp.add_handler(CallbackQueryHandler(button_callback))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
-    # ===== اضافه کردن Handler برای ریپلی خودکار =====
-    dp.add_handler(MessageHandler(Filters.text & Filters.reply, handle_reply))
+    # ===== سوم: MessageHandler برای پیام‌های عادی =====
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
     schedule_daily_jobs(dp)
     schedule_monthly_announcement(dp)
