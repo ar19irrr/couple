@@ -455,13 +455,10 @@ def fall_command(update: Update, context: CallbackContext):
     
     try:
         if not FAALS:
-            msg.edit_text("❌ فایل فال‌ها پیدا نشد! لطفاً با ادمین تماس بگیرید.")
+            msg.edit_text("❌ فایل فال‌ها پیدا نشد!")
             return
         
-        # انتخاب یک فال تصادفی
         choice = random.choice(FAALS)
-        
-        # استخراج اطلاعات
         title = choice.get('title', 'غزل حافظ')
         interpreter = choice.get('interpreter', '')
         
@@ -474,7 +471,7 @@ def fall_command(update: Update, context: CallbackContext):
         
     except Exception as e:
         logger.error(f"❌ خطا در فال: {e}")
-        msg.edit_text(f"❌ خطا در دریافت فال: {e}")
+        msg.edit_text(f"❌ خطا در دریافت فال")
 
 # ==================== Handler برای کلمه "فال" ====================
 def handle_fall_keyword(update: Update, context: CallbackContext):
