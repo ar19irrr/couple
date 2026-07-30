@@ -3,3 +3,4 @@ telethon
 Flask
 openai
 rokh==0.4
+requests
