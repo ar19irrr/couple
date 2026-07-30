@@ -3,6 +3,8 @@ import random
 import threading
 import asyncio
 import os
+import json
+import requests
 from datetime import datetime, timedelta
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -26,6 +28,25 @@ from member_fetcher import get_all_members
 
 # ==================== تقویم شمسی ====================
 from rokh import get_today_events, get_events, DateSystem
+
+# ==================== بارگذاری فال‌ها ====================
+FAL_FILE = os.path.join(os.path.dirname(__file__), 'faal.txt')
+
+def load_faals():
+    """بارگذاری فال‌ها از فایل تکست"""
+    try:
+        with open(FAL_FILE, 'r', encoding='utf-8') as f:
+            content = f.read()
+            # جداسازی فال‌ها با خط تیره
+            faals = content.split('\n\n\n')
+            return [f.strip() for f in faals if f.strip()]
+    except Exception as e:
+        logging.error(f"❌ خطا در بارگذاری فال‌ها: {e}")
+        return []
+
+FAALS = load_faals()
+logger = logging.getLogger(__name__)
+logging.info(f"✅ {len(FAALS)} فال بارگذاری شد")
 
 # ==================== Flask ====================
 app = Flask(__name__)
@@ -198,6 +219,7 @@ def start(update: Update, context: CallbackContext):
 📌 دستورات سریع:
 /ask <سوال> - پرسش از هوش مصنوعی 🧠
 /event - مناسبت‌های امروز 📅
+/fall - فال حافظ 🕌
 /couple - انتخاب زوج تصادفی 💞
 
 👑 **دستورات مالک:**
@@ -215,6 +237,7 @@ def start(update: Update, context: CallbackContext):
 📌 دستورات سریع:
 /ask <سوال> - پرسش از هوش مصنوعی 🧠
 /event - مناسبت‌های امروز 📅
+/fall - فال حافظ 🕌
 /couple - انتخاب زوج تصادفی 💞
 /stats - آمار گروه 📊
 /mystats - آمار شخصی شما 👤
@@ -254,7 +277,7 @@ def help_command(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /ask <سوال> - پرسش سوال از هوش مصنوعی
-   مثال: /ask بهترین فیلم تاریخ چیست？
+   مثال: /ask بهترین فیلم تاریخ چیست؟
 
 📌 ریپلی کنید - روی پیام ربات ریپلی کنید
    تا مکالمه ادامه پیدا کند (بدون نیاز به /ask)
@@ -269,6 +292,13 @@ def help_command(update: Update, context: CallbackContext):
 📌 /event 1405/1/1 - نمایش مناسبت‌های تاریخ مشخص
 
 ━━━━━━━━━━━━━━━━━━━━━
+🕌 بخش فال و استخاره
+━━━━━━━━━━━━━━━━━━━━━
+
+📌 /fall - گرفتن فال حافظ با تفسیر
+📌 **کلمه "فال"** - فقط کلمه "فال" رو بفرستید تا فال دریافت کنید
+
+━━━━━━━━━━━━━━━━━━━━━
 ⚙️ تنظیمات پروفایل
 ━━━━━━━━━━━━━━━━━━━━━
 
@@ -279,7 +309,7 @@ def help_command(update: Update, context: CallbackContext):
 🔧 مدیریت گروه (فقط ادمین)
 ━━━━━━━━━━━━━━━━━━━━━
 
-📌 /addgroup - فعال کردن ربات در اینグループ
+📌 /addgroup - فعال کردن ربات در این گروه
 📌 /reset - ریست کامل دیتابیس
 
 ━━━━━━━━━━━━━━━━━━━━━
@@ -417,6 +447,36 @@ def blocked_list_command(update: Update, context: CallbackContext):
             msg += f"{i}. کاربر ناشناس (ID: {uid})\n"
     
     update.message.reply_text(msg, parse_mode="Markdown")
+
+# ==================== دستور /fall (فال حافظ) ====================
+def fall_command(update: Update, context: CallbackContext):
+    """دریافت فال حافظ از فایل تکست"""
+    msg = update.message.reply_text("🔮 در حال گرفتن فال حافظ...")
+    
+    if not FAALS:
+        msg.edit_text("❌ فایل فال‌ها پیدا نشد! لطفاً با ادمین تماس بگیرید.")
+        return
+    
+    # انتخاب یک فال تصادفی
+    choice = random.choice(FAALS)
+    
+    final_msg = f"🕌 **فال حافظ**\n\n{choice}\n\n— حافظ"
+    
+    msg.edit_text(final_msg, parse_mode="Markdown")
+
+# ==================== Handler برای کلمه "فال" ====================
+def handle_fall_keyword(update: Update, context: CallbackContext):
+    """بررسی پیام‌ها برای کلمه 'فال' و ارسال فال"""
+    if not update.message or not update.message.text:
+        return
+    
+    text = update.message.text.strip()
+    
+    # اگه پیام با "فال" شروع بشه یا دقیقاً "فال" باشه
+    if text == "فال" or text.startswith("فال "):
+        fall_command(update, context)
+        return True
+    return False
 
 # ==================== دستور /event (تقویم شمسی) ====================
 def event_command(update: Update, context: CallbackContext):
@@ -1148,9 +1208,13 @@ def main():
     # ===== Handler برای ریپلی =====
     dp.add_handler(MessageHandler(Filters.text & Filters.reply, handle_reply))
     
+    # ===== Handler برای کلمه "فال" =====
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_fall_keyword))
+    
     # ===== دستورات =====
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
+    dp.add_handler(CommandHandler("fall", fall_command))
     dp.add_handler(CommandHandler("event", event_command))
     dp.add_handler(CommandHandler("ask", ask_command))
     dp.add_handler(CommandHandler("clear_history", clear_history_command))
