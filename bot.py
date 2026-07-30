@@ -450,26 +450,31 @@ def blocked_list_command(update: Update, context: CallbackContext):
 
 # ==================== دستور /fall (فال حافظ) ====================
 def fall_command(update: Update, context: CallbackContext):
-    """دریافت فال حافظ از فایل JSON"""
+    """دریافت فال حافظ"""
     msg = update.message.reply_text("🔮 در حال گرفتن فال حافظ...")
     
-    if not FAALS:
-        msg.edit_text("❌ فایل فال‌ها پیدا نشد! لطفاً با ادمین تماس بگیرید.")
-        return
-    
-    # انتخاب یک فال تصادفی
-    choice = random.choice(FAALS)
-    
-    # استخراج اطلاعات
-    title = choice.get('title', 'غزل حافظ')
-    interpreter = choice.get('interpreter', '')
-    
-    final_msg = f"🕌 **فال حافظ**\n\n"
-    final_msg += f"📜 **{title}**\n\n"
-    final_msg += f"💬 **تفسیر:**\n{interpreter}\n\n"
-    final_msg += "— حافظ"
-    
-    msg.edit_text(final_msg, parse_mode="Markdown")
+    try:
+        if not FAALS:
+            msg.edit_text("❌ فایل فال‌ها پیدا نشد! لطفاً با ادمین تماس بگیرید.")
+            return
+        
+        # انتخاب یک فال تصادفی
+        choice = random.choice(FAALS)
+        
+        # استخراج اطلاعات
+        title = choice.get('title', 'غزل حافظ')
+        interpreter = choice.get('interpreter', '')
+        
+        final_msg = f"🕌 **فال حافظ**\n\n"
+        final_msg += f"📜 **{title}**\n\n"
+        final_msg += f"💬 **تفسیر:**\n{interpreter}\n\n"
+        final_msg += "— حافظ"
+        
+        msg.edit_text(final_msg, parse_mode="Markdown")
+        
+    except Exception as e:
+        logger.error(f"❌ خطا در فال: {e}")
+        msg.edit_text(f"❌ خطا در دریافت فال: {e}")
 
 # ==================== Handler برای کلمه "فال" ====================
 def handle_fall_keyword(update: Update, context: CallbackContext):
