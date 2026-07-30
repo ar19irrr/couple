@@ -29,25 +29,25 @@ from member_fetcher import get_all_members
 # ==================== تقویم شمسی ====================
 from rokh import get_today_events, get_events, DateSystem
 
-# ==================== بارگذاری فال‌ها ====================
-FAL_FILE = os.path.join(os.path.dirname(__file__), 'faal.txt')
+# ==================== بارگذاری فال‌ها از فایل JSON ====================
+import json
+import os
+import random
+
+FAL_FILE = os.path.join(os.path.dirname(__file__), 'fal.json')
 
 def load_faals():
-    """بارگذاری فال‌ها از فایل تکست"""
     try:
         with open(FAL_FILE, 'r', encoding='utf-8') as f:
-            content = f.read()
-            # جداسازی فال‌ها با خط تیره
-            faals = content.split('\n\n\n')
-            return [f.strip() for f in faals if f.strip()]
-    except Exception as e:
-        logging.error(f"❌ خطا در بارگذاری فال‌ها: {e}")
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+            return []
+    except:
         return []
 
 FAALS = load_faals()
-logger = logging.getLogger(__name__)
-logging.info(f"✅ {len(FAALS)} فال بارگذاری شد")
-
+logger.info(f"✅ {len(FAALS)} فال بارگذاری شد")
 # ==================== Flask ====================
 app = Flask(__name__)
 
@@ -450,7 +450,7 @@ def blocked_list_command(update: Update, context: CallbackContext):
 
 # ==================== دستور /fall (فال حافظ) ====================
 def fall_command(update: Update, context: CallbackContext):
-    """دریافت فال حافظ از فایل تکست"""
+    """دریافت فال حافظ از فایل JSON"""
     msg = update.message.reply_text("🔮 در حال گرفتن فال حافظ...")
     
     if not FAALS:
@@ -460,7 +460,14 @@ def fall_command(update: Update, context: CallbackContext):
     # انتخاب یک فال تصادفی
     choice = random.choice(FAALS)
     
-    final_msg = f"🕌 **فال حافظ**\n\n{choice}\n\n— حافظ"
+    # استخراج اطلاعات
+    title = choice.get('title', 'غزل حافظ')
+    interpreter = choice.get('interpreter', '')
+    
+    final_msg = f"🕌 **فال حافظ**\n\n"
+    final_msg += f"📜 **{title}**\n\n"
+    final_msg += f"💬 **تفسیر:**\n{interpreter}\n\n"
+    final_msg += "— حافظ"
     
     msg.edit_text(final_msg, parse_mode="Markdown")
 
