@@ -29,11 +29,16 @@ from member_fetcher import get_all_members
 # ==================== تقویم شمسی ====================
 from rokh import get_today_events, get_events, DateSystem
 
-# ==================== بارگذاری فال‌ها از فایل JSON ====================
-import json
-import os
-import random
+# ==================== تنظیمات لاگ ====================
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
+OWNER_ID = 1095925103
+
+# ==================== بارگذاری فال‌ها ====================
 FAL_FILE = os.path.join(os.path.dirname(__file__), 'fal.json')
 
 def load_faals():
@@ -43,11 +48,13 @@ def load_faals():
             if isinstance(data, list):
                 return data
             return []
-    except:
+    except Exception as e:
+        logger.error(f"❌ خطا در بارگذاری فال‌ها: {e}")
         return []
 
 FAALS = load_faals()
 logger.info(f"✅ {len(FAALS)} فال بارگذاری شد")
+
 # ==================== Flask ====================
 app = Flask(__name__)
 
@@ -62,15 +69,6 @@ def ping():
 def run_flask():
     port = 10000
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-
-# ==================== تنظیمات ====================
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-OWNER_ID = 1095925103
 
 # ==================== پیام‌ها ====================
 COUPLE_MESSAGES = [
@@ -206,7 +204,6 @@ def get_ai_response(prompt):
     return get_ai_response_with_history(history)
 
 def is_user_blocked(user_id):
-    """بررسی بلاک بودن کاربر"""
     return is_user_globally_blocked(user_id)
 
 # ==================== دستورات ====================
@@ -344,7 +341,6 @@ def help_command(update: Update, context: CallbackContext):
 
 # ==================== دستورات بلاک ====================
 def block_command(update: Update, context: CallbackContext):
-    """بلاک کردن یک کاربر (فقط مالک)"""
     user_id = update.effective_user.id
     
     if user_id != OWNER_ID:
@@ -386,7 +382,6 @@ def block_command(update: Update, context: CallbackContext):
         update.message.reply_text(f"ℹ️ کاربر {target_user_id} قبلاً بلاک شده است.")
 
 def unblock_command(update: Update, context: CallbackContext):
-    """آنبلاک کردن یک کاربر (فقط مالک)"""
     user_id = update.effective_user.id
     
     if user_id != OWNER_ID:
@@ -423,7 +418,6 @@ def unblock_command(update: Update, context: CallbackContext):
         update.message.reply_text(f"ℹ️ کاربر {target_user_id} در لیست بلاک نیست.")
 
 def blocked_list_command(update: Update, context: CallbackContext):
-    """مشاهده لیست کاربران بلاک شده (فقط مالک)"""
     user_id = update.effective_user.id
     
     if user_id != OWNER_ID:
@@ -450,12 +444,12 @@ def blocked_list_command(update: Update, context: CallbackContext):
 
 # ==================== دستور /fall (فال حافظ) ====================
 def fall_command(update: Update, context: CallbackContext):
-    """دریافت فال حافظ"""
+    """دریافت فال حافظ از فایل JSON"""
     msg = update.message.reply_text("🔮 در حال گرفتن فال حافظ...")
     
     try:
         if not FAALS:
-            msg.edit_text("❌ فایل فال‌ها پیدا نشد!")
+            msg.edit_text("❌ فایل فال‌ها پیدا نشد! لطفاً با ادمین تماس بگیرید.")
             return
         
         choice = random.choice(FAALS)
@@ -471,25 +465,22 @@ def fall_command(update: Update, context: CallbackContext):
         
     except Exception as e:
         logger.error(f"❌ خطا در فال: {e}")
-        msg.edit_text(f"❌ خطا در دریافت فال")
+        msg.edit_text("❌ خطا در دریافت فال. لطفاً دوباره تلاش کنید.")
 
 # ==================== Handler برای کلمه "فال" ====================
 def handle_fall_keyword(update: Update, context: CallbackContext):
-    """بررسی پیام‌ها برای کلمه 'فال' و ارسال فال"""
     if not update.message or not update.message.text:
         return
     
     text = update.message.text.strip()
     
-    # اگه پیام با "فال" شروع بشه یا دقیقاً "فال" باشه
     if text == "فال" or text.startswith("فال "):
         fall_command(update, context)
         return True
     return False
 
-# ==================== دستور /event (تقویم شمسی) ====================
+# ==================== بقیه دستورات ====================
 def event_command(update: Update, context: CallbackContext):
-    """نمایش مناسبت‌های امروز یا یک تاریخ خاص"""
     user_message = ' '.join(context.args)
     
     try:
@@ -1014,7 +1005,6 @@ def reset_command(update: Update, context: CallbackContext):
 
 # ==================== دستورات ویژه مالک ====================
 def owner_stats_command(update: Update, context: CallbackContext):
-    """آمار ربات برای مالک (فقط OWNER_ID)"""
     user_id = update.effective_user.id
     
     if user_id != OWNER_ID:
@@ -1056,7 +1046,6 @@ def owner_stats_command(update: Update, context: CallbackContext):
     update.message.reply_text(msg)
 
 def owner_users_command(update: Update, context: CallbackContext):
-    """لیست کاربرانی که ربات رو استارت کردن (فقط مالک)"""
     user_id = update.effective_user.id
     
     if user_id != OWNER_ID:
