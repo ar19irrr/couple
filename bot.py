@@ -771,6 +771,88 @@ def couple_command(update: Update, context: CallbackContext):
     
     fortune = get_daily_fortune()
     
+    user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
+    user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
+    
+    msg = f"""{random.choice(COUPLE_MESSAGES)}
+
+به پای هم پیر سیر دیر و عاشق باشید 🫂
+پایدار تا پای دار 
+باهم بمیرید زنده شوید 
+{random.choice(JOKE_MESSAGES)}
+
+👤 {user1['name']}
+یوزرنیم: {user1_username}
+❤️ با ❤️
+👤 {user2['name']}
+یوزرنیم: {user2_username}
+
+{random.choice(CELEBRATION_MESSAGES)}
+
+🌟 فال امروز: {fortune}"""
+    
+    update.message.reply_text(msg)  # بدون parse_mode
+    clear_blocked_users(chat_id)
+    logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
+    
+    check_and_reset_blocked(chat_id)
+    
+    blocked = get_blocked_users(chat_id)
+    user_id = update.effective_user.id
+    user_profile = get_user_profile(chat_id, user_id)
+    user_gender = user_profile.get("gender")
+    
+    if user_gender:
+        opposite_gender = "female" if user_gender == "male" else "male" if user_gender == "female" else None
+        if opposite_gender:
+            filtered_members = []
+            for m in members:
+                if m["id"] in blocked or m["id"] == user_id:
+                    continue
+                profile = get_user_profile(chat_id, m["id"])
+                if profile.get("gender") == opposite_gender:
+                    filtered_members.append(m)
+            
+            available_members = filtered_members if len(filtered_members) >= 2 else [m for m in members if m["id"] not in blocked and m["id"] != user_id]
+        else:
+            available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
+    else:
+        available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
+    
+    if len(available_members) < 2:
+        check_and_reset_blocked(chat_id)
+        blocked = get_blocked_users(chat_id)
+        available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
+        
+        if len(available_members) < 2:
+            update.message.reply_text(
+                f"❌ تعداد اعضای قابل انتخاب کافی نیست.\n"
+                f"🔹 کل اعضا: {len(members)} نفر\n"
+                f"🔹 در لیست سیاه: {len(blocked)} نفر\n"
+                f"🔄 لیست سیاه به‌طور خودکار ریست شد."
+            )
+            return
+    
+    user_interest = user_profile.get("interest")
+    if user_interest and len(available_members) >= 2:
+        interest_matched = []
+        for m in available_members:
+            profile = get_user_profile(chat_id, m["id"])
+            if profile.get("interest") == user_interest:
+                interest_matched.append(m)
+        
+        selected = random.sample(interest_matched, 2) if len(interest_matched) >= 2 else random.sample(available_members, 2)
+    else:
+        selected = random.sample(available_members, 2)
+    
+    user1, user2 = selected[0], selected[1]
+    save_couple(chat_id, user1, user2)
+    
+    update_monthly_score(chat_id, user1["id"])
+    update_monthly_score(chat_id, user2["id"])
+    
+    fortune = get_daily_fortune()
+    
     # ===== تگ‌سازی کاربران (با لینک قابل کلیک) =====
     user1_tag = f"[{user1['name']}](tg://user?id={user1['id']})"
     user2_tag = f"[{user2['name']}](tg://user?id={user2['id']})"
