@@ -25,9 +25,8 @@ from database import (
     remove_global_blocked_user, is_user_globally_blocked
 )
 from member_fetcher import get_all_members
-
-# ==================== تقویم شمسی ====================
 from rokh import get_today_events, get_events, DateSystem
+from bs4 import BeautifulSoup
 
 # ==================== تنظیمات لاگ ====================
 logging.basicConfig(
@@ -206,6 +205,64 @@ def get_ai_response(prompt):
 def is_user_blocked(user_id):
     return is_user_globally_blocked(user_id)
 
+# ==================== خوش‌آمدگویی ====================
+def welcome_new_member(update: Update, context: CallbackContext):
+    """خوش‌آمدگویی به کاربر جدید"""
+    for member in update.message.new_chat_members:
+        if not member.is_bot:
+            welcome_msg = f"🎉 به گروه خوش‌آمدی {member.first_name}!\n"
+            welcome_msg += f"👤 ID: {member.id}\n"
+            welcome_msg += f"📅 تاریخ پیوستن: {datetime.now().strftime('%Y/%m/%d %H:%M')}\n\n"
+            welcome_msg += "📌 **دستورات مفید:**\n"
+            welcome_msg += "/help - راهنمای کامل\n"
+            welcome_msg += "/couple - انتخاب زوج\n"
+            welcome_msg += "/fall - فال حافظ\n"
+            welcome_msg += "/ask - سوال از هوش مصنوعی"
+            update.message.reply_text(welcome_msg, parse_mode="Markdown")
+
+# ==================== اخبار ====================
+def get_news():
+    """دریافت آخرین اخبار"""
+    news = []
+    
+    try:
+        response = requests.get("https://www.tasnimnews.com/fa", timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        items = soup.select('.news-item, .item, .title')[:5]
+        for item in items:
+            title = item.text.strip()
+            if title and len(title) > 10:
+                news.append(f"📰 تسنیم: {title[:80]}...")
+    except Exception as e:
+        logger.error(f"خطا در دریافت اخبار تسنیم: {e}")
+    
+    try:
+        response = requests.get("https://www.mehrnews.com", timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        items = soup.select('.item-title, .title, .news-title')[:5]
+        for item in items:
+            title = item.text.strip()
+            if title and len(title) > 10:
+                news.append(f"📰 مهر: {title[:80]}...")
+    except Exception as e:
+        logger.error(f"خطا در دریافت اخبار مهر: {e}")
+    
+    return news[:5]
+
+def news_command(update: Update, context: CallbackContext):
+    """دریافت آخرین اخبار"""
+    msg = update.message.reply_text("📰 در حال دریافت اخبار...")
+    
+    news = get_news()
+    
+    if news:
+        result = "📰 **آخرین اخبار:**\n\n"
+        for item in news:
+            result += f"• {item}\n"
+        msg.edit_text(result, parse_mode="Markdown")
+    else:
+        msg.edit_text("❌ خطا در دریافت اخبار. لطفاً دوباره تلاش کنید.")
+
 # ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -213,10 +270,11 @@ def start(update: Update, context: CallbackContext):
     if user_id == OWNER_ID:
         start_text = """🤖 **ربات زوج‌یاب پیشرفته با هوش مصنوعی**
 
-📌 دستورات سریع:
+📌 **دستورات سریع:**
 /ask <سوال> - پرسش از هوش مصنوعی 🧠
 /event - مناسبت‌های امروز 📅
 /fall - فال حافظ 🕌
+/news - آخرین اخبار 📰
 /couple - انتخاب زوج تصادفی 💞
 
 👑 **دستورات مالک:**
@@ -231,10 +289,11 @@ def start(update: Update, context: CallbackContext):
 
 📌 برای مشاهده راهنمای کامل دستورات، از دستور /help استفاده کنید.
 
-📌 دستورات سریع:
+📌 **دستورات سریع:**
 /ask <سوال> - پرسش از هوش مصنوعی 🧠
 /event - مناسبت‌های امروز 📅
 /fall - فال حافظ 🕌
+/news - آخرین اخبار 📰
 /couple - انتخاب زوج تصادفی 💞
 /stats - آمار گروه 📊
 /mystats - آمار شخصی شما 👤
@@ -248,17 +307,18 @@ def help_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     help_text = """
-📖 راهنمای کامل ربات زوج‌یاب + هوش مصنوعی
+📖 **راهنمای کامل ربات زوج‌یاب + هوش مصنوعی**
 
 ━━━━━━━━━━━━━━━━━━━━━
-🤖 دستورات عمومی
+🤖 **دستورات عمومی**
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /start - نمایش این پیام
 📌 /help - نمایش راهنمای کامل
+📌 /news - دریافت آخرین اخبار 📰
 
 ━━━━━━━━━━━━━━━━━━━━━
-🎯 بخش زوج‌یابی
+🎯 **بخش زوج‌یابی**
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /couple - انتخاب یک زوج تصادفی
@@ -270,54 +330,54 @@ def help_command(update: Update, context: CallbackContext):
 📌 /monthly_top - برترین‌های ماه
 
 ━━━━━━━━━━━━━━━━━━━━━
-🧠 بخش هوش مصنوعی
+🧠 **بخش هوش مصنوعی**
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /ask <سوال> - پرسش سوال از هوش مصنوعی
    مثال: /ask بهترین فیلم تاریخ چیست؟
 
-📌 ریپلی کنید - روی پیام ربات ریپلی کنید
+📌 **ریپلی کنید** - روی پیام ربات ریپلی کنید
    تا مکالمه ادامه پیدا کند (بدون نیاز به /ask)
 
 📌 /clear_history - پاک کردن تاریخچه مکالمه
 
 ━━━━━━━━━━━━━━━━━━━━━
-📅 بخش تقویم و مناسبت‌ها
+📅 **بخش تقویم و مناسبت‌ها**
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /event - نمایش مناسبت‌های امروز
 📌 /event 1405/1/1 - نمایش مناسبت‌های تاریخ مشخص
 
 ━━━━━━━━━━━━━━━━━━━━━
-🕌 بخش فال و استخاره
+🕌 **بخش فال و استخاره**
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /fall - گرفتن فال حافظ با تفسیر
 📌 **کلمه "فال"** - فقط کلمه "فال" رو بفرستید تا فال دریافت کنید
 
 ━━━━━━━━━━━━━━━━━━━━━
-⚙️ تنظیمات پروفایل
+⚙️ **تنظیمات پروفایل**
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /setgender - تنظیم جنسیت (با دکمه)
 📌 /setinterest - تنظیم علاقه (با دکمه)
 
 ━━━━━━━━━━━━━━━━━━━━━
-🔧 مدیریت گروه (فقط ادمین)
+🔧 **مدیریت گروه (فقط ادمین)**
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /addgroup - فعال کردن ربات در این گروه
 📌 /reset - ریست کامل دیتابیس
 
 ━━━━━━━━━━━━━━━━━━━━━
-💡 نکات مهم
+💡 **نکات مهم**
 ━━━━━━━━━━━━━━━━━━━━━
 
-✅ ربات باید ادمین گروه باشد
-✅ برای دریافت اعضا و AI، VPN روشن باشد
-✅ هر کاربر بعد از لاور شدن، ۷ روز در لیست سیاه می‌رود
-✅ با تمام شدن اعضا، لیست سیاه خودکار ریست می‌شود
-✅ هوش مصنوعی ۱۰ پیام آخر را به خاطر می‌سپارد
+✅ ربات باید **ادمین** گروه باشد
+✅ برای دریافت اعضا و AI، **VPN** روشن باشد
+✅ هر کاربر بعد از لاور شدن، **۷ روز** در لیست سیاه می‌رود
+✅ با تمام شدن اعضا، لیست سیاه **خودکار ریست** می‌شود
+✅ هوش مصنوعی **۱۰ پیام آخر** را به خاطر می‌سپارد
 """
     
     if user_id == OWNER_ID:
@@ -335,7 +395,7 @@ def help_command(update: Update, context: CallbackContext):
     
     help_text += """
 ━━━━━━━━━━━━━━━━━━━━━
-🎉 ربات شما کامل است! لذت ببرید!
+🎉 **ربات شما کامل است! لذت ببرید!**
     """
     update.message.reply_text(help_text)
 
@@ -444,7 +504,6 @@ def blocked_list_command(update: Update, context: CallbackContext):
 
 # ==================== دستور /fall (فال حافظ) ====================
 def fall_command(update: Update, context: CallbackContext):
-    """دریافت فال حافظ از فایل JSON"""
     msg = update.message.reply_text("🔮 در حال گرفتن فال حافظ...")
     
     try:
@@ -1015,8 +1074,8 @@ def owner_stats_command(update: Update, context: CallbackContext):
     data = load_data()
     
     total_users = set()
-    for chat_id in groups:
-        members = get_members(chat_id)
+    for g in groups:
+        members = get_members(g["id"])
         for m in members:
             total_users.add(m.get("id"))
     
@@ -1025,21 +1084,21 @@ def owner_stats_command(update: Update, context: CallbackContext):
     msg += f"👤 تعداد کل کاربران ثبت‌شده: {len(total_users)} نفر\n"
     
     total_couples = 0
-    for chat_id in groups:
-        history = get_couple_history(chat_id, 1000)
+    for g in groups:
+        history = get_couple_history(g["id"], 1000)
         total_couples += len(history)
     msg += f"💞 تعداد کل زوج‌ها: {total_couples} بار\n"
     
     if groups:
         msg += f"\n📌 لیست گروه‌های فعال:\n"
-        for i, chat_id in enumerate(groups, 1):
+        for i, g in enumerate(groups, 1):
             try:
-                chat = context.bot.get_chat(chat_id)
+                chat = context.bot.get_chat(g["id"])
                 chat_name = chat.title or chat.first_name or "گروه ناشناس"
-                member_count = len(get_members(chat_id))
-                msg += f"{i}. {chat_name} (ID: {chat_id}) — {member_count} عضو\n"
+                member_count = len(get_members(g["id"]))
+                msg += f"{i}. {chat_name} (ID: {g['id']}) — {member_count} عضو\n"
             except:
-                msg += f"{i}. گروه ناشناس (ID: {chat_id})\n"
+                msg += f"{i}. گروه ناشناس (ID: {g['id']})\n"
     else:
         msg += "\n📭 هیچ گروه فعالی یافت نشد."
     
@@ -1055,8 +1114,8 @@ def owner_users_command(update: Update, context: CallbackContext):
     groups = get_groups()
     all_users = {}
     
-    for chat_id in groups:
-        members = get_members(chat_id)
+    for g in groups:
+        members = get_members(g["id"])
         for m in members:
             user_id_key = m.get("id")
             if user_id_key:
@@ -1066,7 +1125,7 @@ def owner_users_command(update: Update, context: CallbackContext):
                         "username": m.get("username", "ندارد"),
                         "groups": []
                     }
-                all_users[user_id_key]["groups"].append(chat_id)
+                all_users[user_id_key]["groups"].append(g["id"])
     
     msg = "👥 لیست کاربران ثبت‌شده در ربات\n\n"
     
@@ -1184,9 +1243,9 @@ def schedule_daily_jobs(dispatcher):
         logger.info("ℹ️ هیچ گروه فعالی برای زمان‌بندی یافت نشد.")
         return
     
-    for chat_id in groups:
-        job_queue.run_repeating(daily_job, interval=86400, first=10, context=chat_id)
-        logger.info(f"✅ کار روزانه برای گروه {chat_id} تنظیم شد.")
+    for g in groups:
+        job_queue.run_repeating(daily_job, interval=86400, first=10, context=g["id"])
+        logger.info(f"✅ کار روزانه برای گروه {g['id']} تنظیم شد.")
 
 # ==================== اجرا ====================
 def main():
@@ -1203,6 +1262,9 @@ def main():
     except Exception as e:
         logger.warning(f"⚠️ خطا در پاک کردن Webhook: {e}")
     
+    # ===== خوش‌آمدگویی =====
+    dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome_new_member))
+    
     # ===== Handler برای ریپلی =====
     dp.add_handler(MessageHandler(Filters.text & Filters.reply, handle_reply))
     
@@ -1212,6 +1274,7 @@ def main():
     # ===== دستورات =====
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
+    dp.add_handler(CommandHandler("news", news_command))
     dp.add_handler(CommandHandler("fall", fall_command))
     dp.add_handler(CommandHandler("event", event_command))
     dp.add_handler(CommandHandler("ask", ask_command))
