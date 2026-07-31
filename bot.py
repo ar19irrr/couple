@@ -777,10 +777,7 @@ def couple_command(update: Update, context: CallbackContext):
     
     fortune = get_daily_fortune()
     
-    # ===== تگ با لینک و ایمنی Markdown =====
-    user1_tag = f"[{escape_markdown(user1['name'])}](tg://user?id={user1['id']})"
-    user2_tag = f"[{escape_markdown(user2['name'])}](tg://user?id={user2['id']})"
-    
+    # ===== ساده‌ترین روش: فقط متن، بدون Markdown =====
     user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
     user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
     
@@ -791,17 +788,18 @@ def couple_command(update: Update, context: CallbackContext):
 باهم بمیرید زنده شوید 
 {random.choice(JOKE_MESSAGES)}
 
-👤 {user1_tag}
+👤 {user1['name']}
 یوزرنیم: {user1_username}
 ❤️ با ❤️
-👤 {user2_tag}
+👤 {user2['name']}
 یوزرنیم: {user2_username}
 
 {random.choice(CELEBRATION_MESSAGES)}
 
 🌟 فال امروز: {fortune}"""
     
-    update.message.reply_text(msg, parse_mode="Markdown")
+    # ===== بدون parse_mode =====
+    update.message.reply_text(msg)
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
     
@@ -1253,10 +1251,6 @@ def daily_job(context: CallbackContext):
     
     fortune = get_daily_fortune()
     
-    # ===== تگ‌سازی با لینک برای کار روزانه =====
-    user1_tag = f"[{user1['name']}](tg://user?id={user1['id']})"
-    user2_tag = f"[{user2['name']}](tg://user?id={user2['id']})"
-    
     user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
     user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
     
@@ -1266,20 +1260,19 @@ def daily_job(context: CallbackContext):
 باهم بمیرید زنده شوید 
 {random.choice(JOKE_MESSAGES)}
 
-👤 {user1_tag}
+👤 {user1['name']}
 یوزرنیم: {user1_username}
 ❤️ با ❤️
-👤 {user2_tag}
+👤 {user2['name']}
 یوزرنیم: {user2_username}
 
 {random.choice(CELEBRATION_MESSAGES)}
 
 🌟 فال امروز: {fortune}"""
     
-    bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
+    bot.send_message(chat_id=chat_id, text=msg)  # بدون parse_mode
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
-
 def schedule_daily_jobs(dispatcher):
     job_queue = dispatcher.job_queue
     if not job_queue:
