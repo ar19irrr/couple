@@ -308,9 +308,6 @@ def is_user_globally_blocked(user_id):
     blocked = get_global_blocked_users()
     return user_id in blocked
 
-def load_data():
-    """بارگذاری دیتابیس (برای سازگاری)"""
-    return load_data()
 
 def clear_data():
     save_data({"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}, "global_blocked": []})
