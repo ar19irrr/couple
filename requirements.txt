@@ -4,4 +4,4 @@ Flask
 openai
 rokh==0.4
 requests
-beautifulsoup4
+
