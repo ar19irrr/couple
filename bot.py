@@ -712,6 +712,8 @@ def button_callback(update: Update, context: CallbackContext):
         query.edit_message_text(f"✅ علاقه شما به {interest_label} تنظیم شد!")
 
 # ==================== دستور /couple (نسخه نهایی با تگ آبی) ====================
+import html
+
 def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال انتخاب زوج...")
@@ -779,9 +781,12 @@ def couple_command(update: Update, context: CallbackContext):
     
     fortune = get_daily_fortune()
     
-    # ===== استفاده از HTML به جای Markdown (ایمن‌تر) =====
-    user1_tag = f'<a href="tg://user?id={user1["id"]}">{user1["name"]}</a>'
-    user2_tag = f'<a href="tg://user?id={user2["id"]}">{user2["name"]}</a>'
+    # ===== HTML با Escape کردن کاراکترهای خاص =====
+    user1_name_escaped = html.escape(user1['name'])
+    user2_name_escaped = html.escape(user2['name'])
+    
+    user1_tag = f'<a href="tg://user?id={user1["id"]}">{user1_name_escaped}</a>'
+    user2_tag = f'<a href="tg://user?id={user2["id"]}">{user2_name_escaped}</a>'
     
     user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
     user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
@@ -1138,31 +1143,68 @@ def handle_ai_message(update: Update, context: CallbackContext):
         logger.error(f"❌ خطا در handle_ai_message: {e}")
 
 # ==================== کار روزانه ====================
-def daily_job(context: CallbackContext):
-    chat_id = context.job.context
-    bot = context.bot
+import html
+
+def couple_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    update.message.reply_text("🔄 در حال انتخاب زوج...")
     
-    logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
-    members = update_members_sync(chat_id)
+    members = get_members(chat_id)
     if not members:
-        bot.send_message(chat_id=chat_id, text="❌ خطا در دریافت لیست اعضا.")
+        update.message.reply_text("❌ لیست اعضا خالی است. ابتدا /update را بزنید.")
         return
     
     check_and_reset_blocked(chat_id)
     
     blocked = get_blocked_users(chat_id)
-    available_members = [m for m in members if m["id"] not in blocked]
+    user_id = update.effective_user.id
+    user_profile = get_user_profile(chat_id, user_id)
+    user_gender = user_profile.get("gender")
+    
+    if user_gender:
+        opposite_gender = "female" if user_gender == "male" else "male" if user_gender == "female" else None
+        if opposite_gender:
+            filtered_members = []
+            for m in members:
+                if m["id"] in blocked or m["id"] == user_id:
+                    continue
+                profile = get_user_profile(chat_id, m["id"])
+                if profile.get("gender") == opposite_gender:
+                    filtered_members.append(m)
+            
+            available_members = filtered_members if len(filtered_members) >= 2 else [m for m in members if m["id"] not in blocked and m["id"] != user_id]
+        else:
+            available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
+    else:
+        available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
     
     if len(available_members) < 2:
         check_and_reset_blocked(chat_id)
         blocked = get_blocked_users(chat_id)
-        available_members = [m for m in members if m["id"] not in blocked]
+        available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
         
         if len(available_members) < 2:
-            bot.send_message(chat_id=chat_id, text="❌ تعداد اعضای قابل انتخاب کافی نیست.")
+            update.message.reply_text(
+                f"❌ تعداد اعضای قابل انتخاب کافی نیست.\n"
+                f"🔹 کل اعضا: {len(members)} نفر\n"
+                f"🔹 در لیست سیاه: {len(blocked)} نفر\n"
+                f"🔄 لیست سیاه به‌طور خودکار ریست شد."
+            )
             return
     
-    user1, user2 = random.sample(available_members, 2)
+    user_interest = user_profile.get("interest")
+    if user_interest and len(available_members) >= 2:
+        interest_matched = []
+        for m in available_members:
+            profile = get_user_profile(chat_id, m["id"])
+            if profile.get("interest") == user_interest:
+                interest_matched.append(m)
+        
+        selected = random.sample(interest_matched, 2) if len(interest_matched) >= 2 else random.sample(available_members, 2)
+    else:
+        selected = random.sample(available_members, 2)
+    
+    user1, user2 = selected[0], selected[1]
     save_couple(chat_id, user1, user2)
     
     update_monthly_score(chat_id, user1["id"])
@@ -1170,13 +1212,18 @@ def daily_job(context: CallbackContext):
     
     fortune = get_daily_fortune()
     
-    user1_tag = f'<a href="tg://user?id={user1["id"]}">{user1["name"]}</a>'
-    user2_tag = f'<a href="tg://user?id={user2["id"]}">{user2["name"]}</a>'
+    # ===== HTML با Escape کردن کاراکترهای خاص =====
+    user1_name_escaped = html.escape(user1['name'])
+    user2_name_escaped = html.escape(user2['name'])
+    
+    user1_tag = f'<a href="tg://user?id={user1["id"]}">{user1_name_escaped}</a>'
+    user2_tag = f'<a href="tg://user?id={user2["id"]}">{user2_name_escaped}</a>'
     
     user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
     user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
     
     msg = f"""{random.choice(COUPLE_MESSAGES)}
+
 به پای هم پیر سیر دیر و عاشق باشید 🫂
 پایدار تا پای دار 
 باهم بمیرید زنده شوید 
@@ -1192,9 +1239,9 @@ def daily_job(context: CallbackContext):
 
 🌟 فال امروز: {fortune}"""
     
-    bot.send_message(chat_id=chat_id, text=msg, parse_mode="HTML")
+    update.message.reply_text(msg, parse_mode="HTML")
     clear_blocked_users(chat_id)
-    logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
+    logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
 def schedule_daily_jobs(dispatcher):
     job_queue = dispatcher.job_queue
