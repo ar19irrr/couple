@@ -703,6 +703,7 @@ def button_callback(update: Update, context: CallbackContext):
         interest_label = INTERESTS.get(interest, {}).get("label", interest)
         query.edit_message_text(f"✅ علاقه شما به {interest_label} تنظیم شد!")
 
+# ==================== دستور /couple (با تگ کاربران) ====================
 def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال انتخاب زوج...")
@@ -770,6 +771,13 @@ def couple_command(update: Update, context: CallbackContext):
     
     fortune = get_daily_fortune()
     
+    # ===== تگ‌سازی کاربران (با لینک قابل کلیک) =====
+    user1_tag = f"[{user1['name']}](tg://user?id={user1['id']})"
+    user2_tag = f"[{user2['name']}](tg://user?id={user2['id']})"
+    
+    user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
+    user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
+    
     msg = f"""{random.choice(COUPLE_MESSAGES)}
 
 به پای هم پیر سیر دیر و عاشق باشید 🫂
@@ -777,17 +785,17 @@ def couple_command(update: Update, context: CallbackContext):
 باهم بمیرید زنده شوید 
 {random.choice(JOKE_MESSAGES)}
 
-👤 {user1['name']}
-یوزرنیم: @{user1['username']}
+👤 {user1_tag}
+یوزرنیم: {user1_username}
 ❤️ با ❤️
-👤 {user2['name']}
-یوزرنیم: @{user2['username']}
+👤 {user2_tag}
+یوزرنیم: {user2_username}
 
 {random.choice(CELEBRATION_MESSAGES)}
 
 🌟 فال امروز: {fortune}"""
     
-    update.message.reply_text(msg)
+    update.message.reply_text(msg, parse_mode="Markdown")
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
@@ -1153,23 +1161,30 @@ def daily_job(context: CallbackContext):
     
     fortune = get_daily_fortune()
     
+    # ===== تگ‌سازی با لینک برای کار روزانه =====
+    user1_tag = f"[{user1['name']}](tg://user?id={user1['id']})"
+    user2_tag = f"[{user2['name']}](tg://user?id={user2['id']})"
+    
+    user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
+    user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
+    
     msg = f"""{random.choice(COUPLE_MESSAGES)}
 به پای هم پیر سیر دیر و عاشق باشید 🫂
 پایدار تا پای دار 
 باهم بمیرید زنده شوید 
 {random.choice(JOKE_MESSAGES)}
 
-👤 {user1['name']}
-یوزرنیم: @{user1['username']}
+👤 {user1_tag}
+یوزرنیم: {user1_username}
 ❤️ با ❤️
-👤 {user2['name']}
-یوزرنیم: @{user2['username']}
+👤 {user2_tag}
+یوزرنیم: {user2_username}
 
 {random.choice(CELEBRATION_MESSAGES)}
 
 🌟 فال امروز: {fortune}"""
     
-    bot.send_message(chat_id=chat_id, text=msg)
+    bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
 
