@@ -253,15 +253,83 @@ def news_command(update: Update, context: CallbackContext):
     """دریافت آخرین اخبار"""
     msg = update.message.reply_text("📰 در حال دریافت اخبار...")
     
-    news = get_news()
-    
-    if news:
-        result = "📰 **آخرین اخبار:**\n\n"
-        for item in news:
-            result += f"• {item}\n"
-        msg.edit_text(result, parse_mode="Markdown")
-    else:
-        msg.edit_text("❌ خطا در دریافت اخبار. لطفاً دوباره تلاش کنید.")
+    try:
+        news = []
+        
+        # ===== تست اتصال به اینترنت =====
+        try:
+            import requests
+            response = requests.get("https://www.google.com", timeout=5)
+            if response.status_code == 200:
+                logger.info("✅ اتصال اینترنت برقرار است")
+            else:
+                logger.warning("⚠️ اتصال اینترنت با مشکل مواجه است")
+        except Exception as e:
+            logger.error(f"❌ خطا در اتصال اینترنت: {e}")
+            msg.edit_text("❌ خطا در اتصال به اینترنت. لطفاً دوباره تلاش کنید.")
+            return
+        
+        # ===== دریافت اخبار از خبرگزاری‌ها =====
+        try:
+            from bs4 import BeautifulSoup
+            
+            # خبرگزاری تسنیم
+            try:
+                response = requests.get("https://www.tasnimnews.com/fa", timeout=10)
+                soup = BeautifulSoup(response.text, 'html.parser')
+                items = soup.select('.news-item, .item, .title')[:5]
+                for item in items:
+                    title = item.text.strip()
+                    if title and len(title) > 10:
+                        news.append(f"📰 تسنیم: {title[:80]}...")
+                logger.info(f"✅ اخبار تسنیم: {len(news)} خبر دریافت شد")
+            except Exception as e:
+                logger.error(f"❌ خطا در دریافت اخبار تسنیم: {e}")
+            
+            # خبرگزاری مهر
+            try:
+                response = requests.get("https://www.mehrnews.com", timeout=10)
+                soup = BeautifulSoup(response.text, 'html.parser')
+                items = soup.select('.item-title, .title, .news-title')[:5]
+                for item in items:
+                    title = item.text.strip()
+                    if title and len(title) > 10:
+                        news.append(f"📰 مهر: {title[:80]}...")
+                logger.info(f"✅ اخبار مهر: {len(news)} خبر دریافت شد")
+            except Exception as e:
+                logger.error(f"❌ خطا در دریافت اخبار مهر: {e}")
+            
+            # خبرگزاری ایرنا (جایگزین)
+            if len(news) < 3:
+                try:
+                    response = requests.get("https://www.irna.ir", timeout=10)
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    items = soup.select('.item-title, .title')[:5]
+                    for item in items:
+                        title = item.text.strip()
+                        if title and len(title) > 10:
+                            news.append(f"📰 ایرنا: {title[:80]}...")
+                    logger.info(f"✅ اخبار ایرنا: {len(news)} خبر دریافت شد")
+                except Exception as e:
+                    logger.error(f"❌ خطا در دریافت اخبار ایرنا: {e}")
+                    
+        except ImportError:
+            logger.error("❌ کتابخانه BeautifulSoup نصب نیست!")
+            msg.edit_text("❌ خطا در دریافت اخبار. لطفاً با ادمین تماس بگیرید.")
+            return
+        
+        # ===== نمایش نتیجه =====
+        if news:
+            result = "📰 **آخرین اخبار:**\n\n"
+            for item in news[:10]:
+                result += f"• {item}\n"
+            msg.edit_text(result, parse_mode="Markdown")
+        else:
+            msg.edit_text("❌ خطا در دریافت اخبار. لطفاً دوباره تلاش کنید.")
+            
+    except Exception as e:
+        logger.error(f"❌ خطا در /news: {e}")
+        msg.edit_text(f"❌ خطا در دریافت اخبار: {e}")
 
 # ==================== دستورات ====================
 def start(update: Update, context: CallbackContext):
