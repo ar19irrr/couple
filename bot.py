@@ -704,6 +704,12 @@ def button_callback(update: Update, context: CallbackContext):
         query.edit_message_text(f"✅ علاقه شما به {interest_label} تنظیم شد!")
 
 # ==================== دستور /couple (با تگ کاربران) ====================
+import re
+
+def escape_markdown(text):
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(r'([%s])' % re.escape(escape_chars), r'\\\1', str(text))
+
 def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال انتخاب زوج...")
@@ -771,7 +777,10 @@ def couple_command(update: Update, context: CallbackContext):
     
     fortune = get_daily_fortune()
     
-    # ===== نمایش اسم و یوزرنیم بدون Markdown =====
+    # ===== تگ با لینک و ایمنی Markdown =====
+    user1_tag = f"[{escape_markdown(user1['name'])}](tg://user?id={user1['id']})"
+    user2_tag = f"[{escape_markdown(user2['name'])}](tg://user?id={user2['id']})"
+    
     user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
     user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
     
@@ -782,17 +791,17 @@ def couple_command(update: Update, context: CallbackContext):
 باهم بمیرید زنده شوید 
 {random.choice(JOKE_MESSAGES)}
 
-👤 {user1['name']}
+👤 {user1_tag}
 یوزرنیم: {user1_username}
 ❤️ با ❤️
-👤 {user2['name']}
+👤 {user2_tag}
 یوزرنیم: {user2_username}
 
 {random.choice(CELEBRATION_MESSAGES)}
 
 🌟 فال امروز: {fortune}"""
     
-    update.message.reply_text(msg)  # بدون parse_mode
+    update.message.reply_text(msg, parse_mode="Markdown")
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
     
