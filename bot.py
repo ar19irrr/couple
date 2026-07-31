@@ -779,9 +779,9 @@ def couple_command(update: Update, context: CallbackContext):
     
     fortune = get_daily_fortune()
     
-    # ===== تگ آبی با ایمنی Markdown =====
-    user1_tag = f"[{escape_markdown(user1['name'])}](tg://user?id={user1['id']})"
-    user2_tag = f"[{escape_markdown(user2['name'])}](tg://user?id={user2['id']})"
+    # ===== استفاده از HTML به جای Markdown (ایمن‌تر) =====
+    user1_tag = f'<a href="tg://user?id={user1["id"]}">{user1["name"]}</a>'
+    user2_tag = f'<a href="tg://user?id={user2["id"]}">{user2["name"]}</a>'
     
     user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
     user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
@@ -803,7 +803,7 @@ def couple_command(update: Update, context: CallbackContext):
 
 🌟 فال امروز: {fortune}"""
     
-    update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg, parse_mode="HTML")
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
@@ -1170,9 +1170,8 @@ def daily_job(context: CallbackContext):
     
     fortune = get_daily_fortune()
     
-    # ===== تگ آبی برای کار روزانه =====
-    user1_tag = f"[{escape_markdown(user1['name'])}](tg://user?id={user1['id']})"
-    user2_tag = f"[{escape_markdown(user2['name'])}](tg://user?id={user2['id']})"
+    user1_tag = f'<a href="tg://user?id={user1["id"]}">{user1["name"]}</a>'
+    user2_tag = f'<a href="tg://user?id={user2["id"]}">{user2["name"]}</a>'
     
     user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
     user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
@@ -1193,7 +1192,7 @@ def daily_job(context: CallbackContext):
 
 🌟 فال امروز: {fortune}"""
     
-    bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
+    bot.send_message(chat_id=chat_id, text=msg, parse_mode="HTML")
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
 
