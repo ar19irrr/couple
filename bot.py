@@ -771,6 +771,7 @@ def couple_command(update: Update, context: CallbackContext):
     
     fortune = get_daily_fortune()
     
+    # ===== نمایش اسم و یوزرنیم بدون Markdown =====
     user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
     user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
     
