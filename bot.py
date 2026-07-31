@@ -4,6 +4,7 @@ import threading
 import asyncio
 import os
 import json
+import re
 import requests
 from datetime import datetime, timedelta
 from flask import Flask
@@ -37,6 +38,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 OWNER_ID = 1095925103
+
+# ==================== تابع ایمنی Markdown ====================
+def escape_markdown(text):
+    """فرار دادن کاراکترهای خاص Markdown"""
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(r'([%s])' % re.escape(escape_chars), r'\\\1', str(text))
 
 # ==================== بارگذاری فال‌ها ====================
 FAL_FILE = os.path.join(os.path.dirname(__file__), 'fal.json')
@@ -442,7 +449,7 @@ def blocked_list_command(update: Update, context: CallbackContext):
     
     update.message.reply_text(msg, parse_mode="Markdown")
 
-# ==================== دستور /fall (فال حافظ) ====================
+# ==================== دستور /fall ====================
 def fall_command(update: Update, context: CallbackContext):
     """دریافت فال حافظ از فایل JSON"""
     msg = update.message.reply_text("🔮 در حال گرفتن فال حافظ...")
@@ -479,7 +486,7 @@ def handle_fall_keyword(update: Update, context: CallbackContext):
         return True
     return False
 
-# ==================== بقیه دستورات ====================
+# ==================== دستور /event ====================
 def event_command(update: Update, context: CallbackContext):
     user_message = ' '.join(context.args)
     
@@ -552,6 +559,7 @@ def event_command(update: Update, context: CallbackContext):
         logger.error(f"❌ خطا در /event: {e}")
         update.message.reply_text("❌ خطا در دریافت مناسبت‌ها. لطفاً دوباره تلاش کنید.")
 
+# ==================== دستور /ask ====================
 def ask_command(update: Update, context: CallbackContext):
     user_message = ' '.join(context.args)
     reply_to_message = update.message.reply_to_message
@@ -703,13 +711,7 @@ def button_callback(update: Update, context: CallbackContext):
         interest_label = INTERESTS.get(interest, {}).get("label", interest)
         query.edit_message_text(f"✅ علاقه شما به {interest_label} تنظیم شد!")
 
-# ==================== دستور /couple (با تگ کاربران) ====================
-import re
-
-def escape_markdown(text):
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
-    return re.sub(r'([%s])' % re.escape(escape_chars), r'\\\1', str(text))
-
+# ==================== دستور /couple (نسخه نهایی با تگ آبی) ====================
 def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال انتخاب زوج...")
@@ -777,93 +779,9 @@ def couple_command(update: Update, context: CallbackContext):
     
     fortune = get_daily_fortune()
     
-    # ===== ساده‌ترین روش: فقط متن، بدون Markdown =====
-    user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
-    user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
-    
-    msg = f"""{random.choice(COUPLE_MESSAGES)}
-
-به پای هم پیر سیر دیر و عاشق باشید 🫂
-پایدار تا پای دار 
-باهم بمیرید زنده شوید 
-{random.choice(JOKE_MESSAGES)}
-
-👤 {user1['name']}
-یوزرنیم: {user1_username}
-❤️ با ❤️
-👤 {user2['name']}
-یوزرنیم: {user2_username}
-
-{random.choice(CELEBRATION_MESSAGES)}
-
-🌟 فال امروز: {fortune}"""
-    
-    # ===== بدون parse_mode =====
-    update.message.reply_text(msg)
-    clear_blocked_users(chat_id)
-    logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
-    
-    check_and_reset_blocked(chat_id)
-    
-    blocked = get_blocked_users(chat_id)
-    user_id = update.effective_user.id
-    user_profile = get_user_profile(chat_id, user_id)
-    user_gender = user_profile.get("gender")
-    
-    if user_gender:
-        opposite_gender = "female" if user_gender == "male" else "male" if user_gender == "female" else None
-        if opposite_gender:
-            filtered_members = []
-            for m in members:
-                if m["id"] in blocked or m["id"] == user_id:
-                    continue
-                profile = get_user_profile(chat_id, m["id"])
-                if profile.get("gender") == opposite_gender:
-                    filtered_members.append(m)
-            
-            available_members = filtered_members if len(filtered_members) >= 2 else [m for m in members if m["id"] not in blocked and m["id"] != user_id]
-        else:
-            available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
-    else:
-        available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
-    
-    if len(available_members) < 2:
-        check_and_reset_blocked(chat_id)
-        blocked = get_blocked_users(chat_id)
-        available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
-        
-        if len(available_members) < 2:
-            update.message.reply_text(
-                f"❌ تعداد اعضای قابل انتخاب کافی نیست.\n"
-                f"🔹 کل اعضا: {len(members)} نفر\n"
-                f"🔹 در لیست سیاه: {len(blocked)} نفر\n"
-                f"🔄 لیست سیاه به‌طور خودکار ریست شد."
-            )
-            return
-    
-    user_interest = user_profile.get("interest")
-    if user_interest and len(available_members) >= 2:
-        interest_matched = []
-        for m in available_members:
-            profile = get_user_profile(chat_id, m["id"])
-            if profile.get("interest") == user_interest:
-                interest_matched.append(m)
-        
-        selected = random.sample(interest_matched, 2) if len(interest_matched) >= 2 else random.sample(available_members, 2)
-    else:
-        selected = random.sample(available_members, 2)
-    
-    user1, user2 = selected[0], selected[1]
-    save_couple(chat_id, user1, user2)
-    
-    update_monthly_score(chat_id, user1["id"])
-    update_monthly_score(chat_id, user2["id"])
-    
-    fortune = get_daily_fortune()
-    
-    # ===== تگ‌سازی کاربران (با لینک قابل کلیک) =====
-    user1_tag = f"[{user1['name']}](tg://user?id={user1['id']})"
-    user2_tag = f"[{user2['name']}](tg://user?id={user2['id']})"
+    # ===== تگ آبی با ایمنی Markdown =====
+    user1_tag = f"[{escape_markdown(user1['name'])}](tg://user?id={user1['id']})"
+    user2_tag = f"[{escape_markdown(user2['name'])}](tg://user?id={user2['id']})"
     
     user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
     user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
@@ -889,6 +807,7 @@ def couple_command(update: Update, context: CallbackContext):
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
+# ==================== سایر دستورات ====================
 def monthly_top_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     members = get_members(chat_id)
@@ -1251,6 +1170,10 @@ def daily_job(context: CallbackContext):
     
     fortune = get_daily_fortune()
     
+    # ===== تگ آبی برای کار روزانه =====
+    user1_tag = f"[{escape_markdown(user1['name'])}](tg://user?id={user1['id']})"
+    user2_tag = f"[{escape_markdown(user2['name'])}](tg://user?id={user2['id']})"
+    
     user1_username = f"@{user1['username']}" if user1['username'] else "ندارد"
     user2_username = f"@{user2['username']}" if user2['username'] else "ندارد"
     
@@ -1260,19 +1183,20 @@ def daily_job(context: CallbackContext):
 باهم بمیرید زنده شوید 
 {random.choice(JOKE_MESSAGES)}
 
-👤 {user1['name']}
+👤 {user1_tag}
 یوزرنیم: {user1_username}
 ❤️ با ❤️
-👤 {user2['name']}
+👤 {user2_tag}
 یوزرنیم: {user2_username}
 
 {random.choice(CELEBRATION_MESSAGES)}
 
 🌟 فال امروز: {fortune}"""
     
-    bot.send_message(chat_id=chat_id, text=msg)  # بدون parse_mode
+    bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
+
 def schedule_daily_jobs(dispatcher):
     job_queue = dispatcher.job_queue
     if not job_queue:
