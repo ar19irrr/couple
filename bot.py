@@ -916,14 +916,13 @@ def addgroup_command(update: Update, context: CallbackContext):
     
     if add_group(chat_id):
         update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد.")
-        members = update_members_sync(context.bot, chat_id)
+        members = update_members_sync(chat_id)  # <--- فقط chat_id
         if members:
             update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
         else:
             update.message.reply_text("❌ خطا در دریافت اعضا. لطفاً VPN را روشن کنید و ربات را ادمین کنید.")
     else:
         update.message.reply_text(f"ℹ️ این گروه قبلاً به لیست اضافه شده است.")
-
 def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا...")
@@ -938,6 +937,24 @@ def update_command(update: Update, context: CallbackContext):
                 "2️⃣ گزینه Make Admin را بزنید\n"
                 "3️⃣ تمام دسترسی‌ها را فعال کنید\n"
                 "4️⃣ دوباره /update را بزنید"
+            )
+            return
+    except Exception as e:
+        logger.error(f"❌ خطا در بررسی ادمین: {e}")
+        update.message.reply_text("❌ خطا در بررسی دسترسی ربات.")
+        return
+    
+    members = update_members_sync(chat_id)  # <--- فقط chat_id
+    if members:
+        update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
+    else:
+        update.message.reply_text(
+            "❌ خطا در دریافت اعضا.\n"
+            "لطفاً موارد زیر را بررسی کنید:\n"
+            "1️⃣ VPN روشن است\n"
+            "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
+            "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
+        )
             )
             return
     except Exception as e:
@@ -1168,7 +1185,7 @@ def daily_job(context: CallbackContext):
     bot = context.bot
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
-    members = update_members_sync(bot, chat_id)
+    members = update_members_sync(chat_id)  # <--- فقط chat_id
     if not members:
         bot.send_message(chat_id=chat_id, text="❌ خطا در دریافت لیست اعضا.")
         return
