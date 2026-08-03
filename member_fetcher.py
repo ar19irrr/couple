@@ -7,8 +7,21 @@ import config
 
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
+async def save_entity_to_session(client, chat_id):
+    """گروه جدید را به فایل نشست اضافه می‌کند تا access_hash آن ذخیره شود."""
+    try:
+        # دریافت مستقیم گروه با chat_id
+        entity = await client.get_entity(chat_id)
+        # این خط باعث می‌شود که entity در فایل نشست ذخیره شود
+        await client.get_input_entity(entity)
+        print(f"✅ گروه {chat_id} با موفقیت در نشست ذخیره شد.")
+        return entity
+    except Exception as e:
+        print(f"⚠️ خطا در ذخیره گروه در نشست: {e}")
+        return None
+
 async def get_all_members(chat_id):
-    """دریافت همه اعضای گروه - روش مستقیم و ساده"""
+    """دریافت همه اعضای گروه - با ذخیره فعال گروه در نشست"""
     try:
         if not os.path.exists(SESSION_FILE):
             print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
@@ -21,16 +34,26 @@ async def get_all_members(chat_id):
         async with client:
             await client.start()
             
-            # ===== دریافت مستقیم گروه با chat_id =====
-            try:
-                # روش مستقیم با chat_id
-                entity = await client.get_entity(chat_id)
-                print(f"✅ گروه با شناسه {chat_id} پیدا شد.")
-            except Exception as e:
-                print(f"❌ خطا در دریافت گروه: {e}")
-                return []
+            # ===== مرحله ۱: ذخیره فعال گروه در نشست =====
+            # این کار باعث می‌شود که access_hash گروه جدید در فایل نشست ثبت شود
+            entity = await save_entity_to_session(client, chat_id)
+            if entity is None:
+                # اگر روش مستقیم کار نکرد، از دیالوگ‌ها استفاده کن
+                print("🔄 تلاش برای پیدا کردن گروه در دیالوگ‌ها...")
+                dialogs = await client.get_dialogs()
+                for dialog in dialogs:
+                    if dialog.is_group and dialog.id == chat_id:
+                        entity = dialog.entity
+                        # ذخیره در نشست
+                        await client.get_input_entity(entity)
+                        print(f"✅ گروه {chat_id} از دیالوگ‌ها در نشست ذخیره شد.")
+                        break
+                
+                if entity is None:
+                    print(f"❌ گروه پیدا نشد!")
+                    return []
             
-            # ===== دریافت اعضا =====
+            # ===== مرحله ۲: دریافت اعضا =====
             members = []
             offset = 0
             limit = 200
