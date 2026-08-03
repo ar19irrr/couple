@@ -944,7 +944,7 @@ def update_command(update: Update, context: CallbackContext):
         update.message.reply_text("❌ خطا در بررسی دسترسی ربات.")
         return
     
-    members = update_members_sync(chat_id)  # <--- فقط chat_id
+    members = update_members_sync(chat_id)
     if members:
         update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
     else:
@@ -954,7 +954,7 @@ def update_command(update: Update, context: CallbackContext):
             "1️⃣ VPN روشن است\n"
             "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
             "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
-       ) 
+        )
             return
     except Exception as e:
         logger.error(f"❌ خطا در بررسی ادمین: {e}")
