@@ -10,7 +10,7 @@ def load_data():
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if not isinstance(data, dict):
-                    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}, "global_blocked": []}
+                    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "weekly_scores": {}, "global_blocked": []}
                 if "members" not in data:
                     data["members"] = {}
                 if "last_couple" not in data:
@@ -23,14 +23,14 @@ def load_data():
                     data["groups"] = []
                 if "profiles" not in data:
                     data["profiles"] = {}
-                if "monthly_scores" not in data:
-                    data["monthly_scores"] = {}
+                if "weekly_scores" not in data:
+                    data["weekly_scores"] = {}
                 if "global_blocked" not in data:
                     data["global_blocked"] = []
                 return data
         except:
-            return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}, "global_blocked": []}
-    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}, "global_blocked": []}
+            return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "weekly_scores": {}, "global_blocked": []}
+    return {"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "weekly_scores": {}, "global_blocked": []}
 
 def save_data(data):
     try:
@@ -73,7 +73,7 @@ def get_all_chats_from_members():
         chats.add(int(chat_id))
     for chat_id in data.get("blocked", {}).keys():
         chats.add(int(chat_id))
-    for chat_id in data.get("monthly_scores", {}).keys():
+    for chat_id in data.get("weekly_scores", {}).keys():
         chats.add(int(chat_id))
     for chat_id in data.get("profiles", {}).keys():
         chats.add(int(chat_id))
@@ -103,12 +103,18 @@ def sync_groups():
 # ==================== اعضا ====================
 def get_members(chat_id):
     data = load_data()
-    return data.get("members", {}).get(str(chat_id), [])  # هر گروه جداگانه
+    members = data.get("members", {}).get(str(chat_id), [])
+    if not isinstance(members, list):
+        return []
+    return members
 
 def set_members(chat_id, members_list):
     data = load_data()
-    data["members"][str(chat_id)] = members_list  # ذخیره با chat_id
+    if not isinstance(members_list, list):
+        members_list = []
+    data["members"][str(chat_id)] = members_list
     save_data(data)
+
 # ==================== پروفایل کاربران ====================
 def get_user_profile(chat_id, user_id):
     data = load_data()
@@ -135,36 +141,40 @@ def set_user_interest(chat_id, user_id, interest):
     profile["interest"] = interest
     set_user_profile(chat_id, user_id, profile)
 
-# ==================== امتیازات ماهانه ====================
-def get_monthly_score(chat_id, user_id):
+# ==================== امتیازات هفتگی ====================
+def get_weekly_score(chat_id, user_id):
+    """دریافت امتیاز هفتگی یک کاربر"""
     data = load_data()
-    monthly = data.get("monthly_scores", {}).get(str(chat_id), {})
-    return monthly.get(str(user_id), 0)
+    weekly = data.get("weekly_scores", {}).get(str(chat_id), {})
+    return weekly.get(str(user_id), 0)
 
-def update_monthly_score(chat_id, user_id, points=1):
+def update_weekly_score(chat_id, user_id, points=1):
+    """افزایش امتیاز هفتگی کاربر"""
     data = load_data()
     chat_id_str = str(chat_id)
     user_id_str = str(user_id)
     
-    if "monthly_scores" not in data:
-        data["monthly_scores"] = {}
-    if chat_id_str not in data["monthly_scores"]:
-        data["monthly_scores"][chat_id_str] = {}
+    if "weekly_scores" not in data:
+        data["weekly_scores"] = {}
+    if chat_id_str not in data["weekly_scores"]:
+        data["weekly_scores"][chat_id_str] = {}
     
-    data["monthly_scores"][chat_id_str][user_id_str] = \
-        data["monthly_scores"][chat_id_str].get(user_id_str, 0) + points
+    data["weekly_scores"][chat_id_str][user_id_str] = \
+        data["weekly_scores"][chat_id_str].get(user_id_str, 0) + points
     save_data(data)
 
-def reset_monthly_scores(chat_id):
+def reset_weekly_scores(chat_id):
+    """ریست کردن امتیازات هفتگی"""
     data = load_data()
     chat_id_str = str(chat_id)
-    if "monthly_scores" in data and chat_id_str in data["monthly_scores"]:
-        data["monthly_scores"][chat_id_str] = {}
+    if "weekly_scores" in data and chat_id_str in data["weekly_scores"]:
+        data["weekly_scores"][chat_id_str] = {}
         save_data(data)
 
-def get_all_monthly_scores(chat_id):
+def get_all_weekly_scores(chat_id):
+    """دریافت همه امتیازات هفتگی یک گروه"""
     data = load_data()
-    return data.get("monthly_scores", {}).get(str(chat_id), {})
+    return data.get("weekly_scores", {}).get(str(chat_id), {})
 
 # ==================== زوج‌ها ====================
 def save_couple(chat_id, user1, user2):
@@ -430,5 +440,5 @@ def get_user_total_couples(chat_id, user_id):
     return total
 
 def clear_data():
-    save_data({"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "monthly_scores": {}, "global_blocked": []})
+    save_data({"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "weekly_scores": {}, "global_blocked": []})
     print("✅ دیتابیس پاک شد")
