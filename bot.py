@@ -129,32 +129,32 @@ GENDERS = {
 }
 
 def update_members_sync(chat_id):
-    """به‌روزرسانی لیست اعضا - روش جایگزین"""
+    """به‌روزرسانی لیست اعضا - نسخه نهایی"""
     try:
         logger.info(f"🔄 شروع دریافت اعضا برای گروه {chat_id}")
         
-        # ===== روش ۱: تلاش با Telethon =====
+        # ===== اجرای مستقیم =====
         try:
-            members = asyncio.run(get_all_members(chat_id))
+            # ایجاد حلقه جدید
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            members = loop.run_until_complete(get_all_members(chat_id))
+            loop.close()
+            
             if members and len(members) > 0:
                 set_members(chat_id, members)
-                logger.info(f"✅ {len(members)} عضو با Telethon ذخیره شد")
+                logger.info(f"✅ {len(members)} عضو ذخیره شد")
                 return members
+            else:
+                logger.warning(f"⚠️ هیچ عضوی پیدا نشد")
+                return []
+                
         except Exception as e:
-            logger.error(f"❌ Telethon خطا داد: {e}")
-        
-        # ===== روش ۲: استفاده از خود ربات (فقط ادمین‌ها) =====
-        try:
-            # اینجا از خود ربات برای دریافت ادمین‌ها استفاده میکنیم
-            # (فعلاً خالی برمی‌گردونیم)
-            logger.info("🔄 تلاش با روش جایگزین...")
-            return []
-        except Exception as e:
-            logger.error(f"❌ روش جایگزین خطا داد: {e}")
+            logger.error(f"❌ خطا: {e}")
             return []
             
     except Exception as e:
-        logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}: {e}")
+        logger.error(f"❌ خطا: {e}")
         return []
 def get_daily_fortune():
     return random.choice(FORTUNES)
