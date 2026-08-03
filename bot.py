@@ -60,7 +60,6 @@ logger.info(f"✅ {len(FAALS)} فال بارگذاری شد")
 
 # ==================== ساخت خودکار نشست ====================
 async def create_session_automatically():
-    """ساخت خودکار فایل نشست در Render"""
     try:
         from telethon import TelegramClient
         if not hasattr(config, 'API_ID') or not hasattr(config, 'API_HASH'):
@@ -78,7 +77,6 @@ async def create_session_automatically():
         return False
 
 def ensure_session():
-    """اطمینان از وجود فایل نشست"""
     session_file = os.path.join(os.path.dirname(__file__), 'session.session')
     if not os.path.exists(session_file):
         logger.info("🔄 فایل نشست وجود ندارد. در حال ساخت...")
@@ -167,11 +165,9 @@ GENDERS = {
 }
 
 def update_members_sync(chat_id):
-    """به‌روزرسانی لیست اعضا با مدیریت Event Loop"""
     try:
         logger.info(f"🔄 شروع دریافت اعضا برای گروه {chat_id}")
         
-        # ===== اجرای تابع get_all_members با مدیریت Event Loop =====
         try:
             members = asyncio.run(get_all_members(chat_id))
         except RuntimeError as e:
@@ -522,35 +518,234 @@ def handle_fall_keyword(update: Update, context: CallbackContext):
         return True
     return False
 
-# ==================== سایر دستورات ====================
+# ==================== دستور /event ====================
 def event_command(update: Update, context: CallbackContext):
-    # ... (همان کد قبلی)
-    pass
+    user_message = ' '.join(context.args)
+    
+    try:
+        if user_message:
+            parts = user_message.split('/')
+            if len(parts) == 3:
+                year = int(parts[0])
+                month = int(parts[1])
+                day = int(parts[2])
+                events_data = get_events(
+                    day=day, 
+                    month=month, 
+                    year=year, 
+                    input_date_system=DateSystem.JALALI
+                )
+                date_str = f"{year}/{month}/{day}"
+            else:
+                update.message.reply_text("❌ فرمت تاریخ اشتباه است. مثال: /event 1405/1/1")
+                return
+        else:
+            events_data = get_today_events()
+            jalali_date = events_data.get('jalali_date', {})
+            date_str = f"{jalali_date.get('year', '')}/{jalali_date.get('month', '')}/{jalali_date.get('day', '')}"
+        
+        events = events_data.get('events', {})
+        is_holiday = events_data.get('is_holiday', False)
+        
+        msg = f"📅 **تقویم روز {date_str}**\n\n"
+        
+        jalali_events = events.get('jalali', [])
+        if jalali_events:
+            msg += "🟢 **مناسبت‌های شمسی:**\n"
+            for e in jalali_events:
+                desc = e.get('description', '')
+                is_holiday_event = e.get('is_holiday', False)
+                holiday_tag = "🔴 (تعطیل)" if is_holiday_event else ""
+                msg += f"  • {desc} {holiday_tag}\n"
+            msg += "\n"
+        
+        gregorian_events = events.get('gregorian', [])
+        if gregorian_events:
+            msg += "🔵 **مناسبت‌های میلادی:**\n"
+            for e in gregorian_events:
+                desc = e.get('description', '')
+                is_holiday_event = e.get('is_holiday', False)
+                holiday_tag = "🔴 (تعطیل)" if is_holiday_event else ""
+                msg += f"  • {desc} {holiday_tag}\n"
+            msg += "\n"
+        
+        hijri_events = events.get('hijri', [])
+        if hijri_events:
+            msg += "🟡 **مناسبت‌های هجری قمری:**\n"
+            for e in hijri_events:
+                desc = e.get('description', '')
+                is_holiday_event = e.get('is_holiday', False)
+                holiday_tag = "🔴 (تعطیل)" if is_holiday_event else ""
+                msg += f"  • {desc} {holiday_tag}\n"
+            msg += "\n"
+        
+        if is_holiday:
+            msg += "🎉 **امروز تعطیل رسمی است!** 🎉"
+        
+        if not jalali_events and not gregorian_events and not hijri_events:
+            msg += "📭 هیچ مناسبت خاصی برای این تاریخ ثبت نشده است."
+        
+        update.message.reply_text(msg, parse_mode="Markdown")
+        
+    except Exception as e:
+        logger.error(f"❌ خطا در /event: {e}")
+        update.message.reply_text("❌ خطا در دریافت مناسبت‌ها. لطفاً دوباره تلاش کنید.")
 
+# ==================== دستور /ask ====================
 def ask_command(update: Update, context: CallbackContext):
-    # ... (همان کد قبلی)
-    pass
+    user_message = ' '.join(context.args)
+    reply_to_message = update.message.reply_to_message
+    
+    if reply_to_message and not user_message:
+        if reply_to_message.from_user.is_bot:
+            user_message = reply_to_message.text
+            if user_message and "🤖 پاسخ هوش مصنوعی" in user_message:
+                user_message = user_message.split("\n\n")[-1] if "\n\n" in user_message else user_message
+        else:
+            user_message = reply_to_message.text
+    
+    if not user_message:
+        update.message.reply_text(
+            "❌ لطفاً سوال خود را بعد از /ask بنویسید یا روی یک پیام ریپلی کنید.\n"
+            "مثال: /ask بهترین فیلم تاریخ چیست؟"
+        )
+        return
+    
+    loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
+    
+    try:
+        history = context.user_data.get("chat_history", [])
+        history.append({"role": "user", "content": user_message})
+        
+        if len(history) > 10:
+            history = history[-10:]
+        
+        ai_response = get_ai_response_with_history(history)
+        
+        if ai_response:
+            history.append({"role": "assistant", "content": ai_response})
+            context.user_data["chat_history"] = history
+            
+            if len(ai_response) > 4000:
+                parts = [ai_response[i:i+4000] for i in range(0, len(ai_response), 4000)]
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی (بخش ۱ از {len(parts)}):\n\n{parts[0]}")
+                for i, part in enumerate(parts[1:], 2):
+                    update.message.reply_text(f"🤖 پاسخ هوش مصنوعی (بخش {i} از {len(parts)}):\n\n{part}")
+            else:
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
+        else:
+            loading_msg.edit_text(
+                "❌ خطا در دریافت پاسخ.\n"
+                "لطفاً چند دقیقه دیگر تلاش کنید یا سوال خود را کوتاه‌تر کنید."
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ خطا در /ask: {e}")
+        loading_msg.edit_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
 
 def handle_reply(update: Update, context: CallbackContext):
-    # ... (همان کد قبلی)
-    pass
+    try:
+        if not update.message.reply_to_message:
+            return
+        
+        replied_msg = update.message.reply_to_message
+        if not replied_msg.from_user.is_bot:
+            return
+        
+        bot_username = context.bot.username
+        if replied_msg.from_user.username != bot_username:
+            return
+        
+        user_message = update.message.text
+        if not user_message:
+            return
+        
+        loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
+        
+        history = context.user_data.get("chat_history", [])
+        history.append({"role": "user", "content": user_message})
+        
+        if len(history) > 10:
+            history = history[-10:]
+        
+        ai_response = get_ai_response_with_history(history)
+        
+        if ai_response:
+            history.append({"role": "assistant", "content": ai_response})
+            context.user_data["chat_history"] = history
+            
+            if len(ai_response) > 4000:
+                parts = [ai_response[i:i+4000] for i in range(0, len(ai_response), 4000)]
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی (بخش ۱ از {len(parts)}):\n\n{parts[0]}")
+                for i, part in enumerate(parts[1:], 2):
+                    update.message.reply_text(f"🤖 پاسخ هوش مصنوعی (بخش {i} از {len(parts)}):\n\n{part}")
+            else:
+                loading_msg.edit_text(f"🤖 پاسخ هوش مصنوعی:\n\n{ai_response}")
+        else:
+            loading_msg.edit_text(
+                "❌ خطا در دریافت پاسخ.\n"
+                "لطفاً چند دقیقه دیگر تلاش کنید."
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ خطا در handle_reply: {e}")
+        update.message.reply_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
 
 def clear_history_command(update: Update, context: CallbackContext):
     context.user_data["chat_history"] = []
     update.message.reply_text("✅ تاریخچه مکالمه پاک شد!")
 
+# ==================== تنظیم جنسیت ====================
 def setgender_command(update: Update, context: CallbackContext):
-    # ... (همان کد قبلی)
-    pass
+    keyboard = [
+        [InlineKeyboardButton("👨 مرد", callback_data="gender_male")],
+        [InlineKeyboardButton("👩 زن", callback_data="gender_female")],
+        [InlineKeyboardButton("🌈 سایر", callback_data="gender_other")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    update.message.reply_text(
+        "🧑‍🤝‍🧑 لطفاً جنسیت خود را انتخاب کنید:\n\nاین اطلاعات برای انتخاب زوج بر اساس جنسیت استفاده می‌شود.",
+        reply_markup=reply_markup
+    )
 
+# ==================== تنظیم علاقه ====================
 def setinterest_command(update: Update, context: CallbackContext):
-    # ... (همان کد قبلی)
-    pass
+    keyboard = []
+    for key, value in INTERESTS.items():
+        keyboard.append([InlineKeyboardButton(
+            f"{value['emoji']} {value['label']}",
+            callback_data=f"interest_{key}"
+        )])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    update.message.reply_text(
+        "🎯 لطفاً علاقه‌مندی خود را انتخاب کنید:\n\nاین اطلاعات برای انتخاب زوج بر اساس علایق مشترک استفاده می‌شود.",
+        reply_markup=reply_markup
+    )
 
 def button_callback(update: Update, context: CallbackContext):
-    # ... (همان کد قبلی)
-    pass
+    query = update.callback_query
+    query.answer()
+    
+    chat_id = query.message.chat_id
+    user_id = query.from_user.id
+    data = query.data
+    
+    if data.startswith("gender_"):
+        gender = data.replace("gender_", "")
+        set_user_gender(chat_id, user_id, gender)
+        gender_label = GENDERS.get(gender, gender)
+        query.edit_message_text(f"✅ جنسیت شما به {gender_label} تنظیم شد!")
+    
+    elif data.startswith("interest_"):
+        interest = data.replace("interest_", "")
+        set_user_interest(chat_id, user_id, interest)
+        interest_label = INTERESTS.get(interest, {}).get("label", interest)
+        query.edit_message_text(f"✅ علاقه شما به {interest_label} تنظیم شد!")
 
+# ==================== انتخاب زوج ====================
 def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال انتخاب زوج...")
@@ -637,6 +832,7 @@ def couple_command(update: Update, context: CallbackContext):
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
+# ==================== برترین‌های هفته ====================
 def weekly_top_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     members = get_members(chat_id)
@@ -706,10 +902,11 @@ def schedule_weekly_announcement(dispatcher):
     job_queue.run_daily(
         weekly_announcement_job,
         time=time(hour=12, minute=0),
-        days=(6,),  # یکشنبه
+        days=(6,),
         context=dispatcher
     )
 
+# ==================== بقیه دستورات ====================
 def addgroup_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     logger.info(f"📌 تلاش برای افزودن گروه: {chat_id}")
@@ -1056,7 +1253,7 @@ def schedule_daily_jobs(dispatcher):
     for chat_id in groups:
         job_queue.run_repeating(
             daily_job,
-            interval=86400,
+            interval=14400,  # ۴ ساعت
             first=10,
             context=chat_id
         )
@@ -1064,10 +1261,8 @@ def schedule_daily_jobs(dispatcher):
 
 # ==================== اجرا ====================
 def main():
-    # ===== ساخت نشست اگر وجود نداشته باشد =====
     ensure_session()
     
-    # ===== اجرای Flask =====
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
@@ -1081,13 +1276,9 @@ def main():
     except Exception as e:
         logger.warning(f"⚠️ خطا در پاک کردن Webhook: {e}")
     
-    # ===== Handler برای ریپلی =====
     dp.add_handler(MessageHandler(Filters.text & Filters.reply, handle_reply))
-    
-    # ===== Handler برای کلمه "فال" =====
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_fall_keyword))
     
-    # ===== دستورات =====
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("fall", fall_command))
@@ -1107,19 +1298,16 @@ def main():
     dp.add_handler(CommandHandler("weekly_top", weekly_top_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
-    # ===== دستورات بلاک =====
     dp.add_handler(CommandHandler("block", block_command))
     dp.add_handler(CommandHandler("unblock", unblock_command))
     dp.add_handler(CommandHandler("blocked_list", blocked_list_command))
     
-    # ===== دستورات مالک =====
     dp.add_handler(CommandHandler("owner_stats", owner_stats_command))
     dp.add_handler(CommandHandler("owner_users", owner_users_command))
     
     dp.add_handler(CallbackQueryHandler(button_callback))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
-    # ===== زمان‌بندی‌ها =====
     schedule_daily_jobs(dp)
     schedule_weekly_announcement(dp)
     
