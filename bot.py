@@ -382,7 +382,6 @@ def help_command(update: Update, context: CallbackContext):
 🎉 ارادتمند شما AR19
     """
     update.message.reply_text(help_text)
-
 # ==================== دستورات بلاک ====================
 def block_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
