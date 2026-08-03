@@ -954,8 +954,7 @@ def update_command(update: Update, context: CallbackContext):
             "1️⃣ VPN روشن است\n"
             "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
             "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
-        )
-            )
+       ) 
             return
     except Exception as e:
         logger.error(f"❌ خطا در بررسی ادمین: {e}")
