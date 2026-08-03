@@ -8,7 +8,7 @@ import config
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
 async def get_all_members(chat_id):
-    """دریافت همه اعضای گروه با Telethon - بهینه شده برای گروه‌های بزرگ"""
+    """دریافت همه اعضای گروه با Telethon - بدون محدودیت"""
     try:
         if not os.path.exists(SESSION_FILE):
             print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
@@ -28,7 +28,7 @@ async def get_all_members(chat_id):
 
             members = []
             offset = 0
-            limit = 200  # افزایش به ۲۰۰ برای سرعت بیشتر
+            limit = 200  # تعداد در هر درخواست (حداکثر ۲۰۰)
             
             print(f"⏳ در حال دریافت اعضای گروه {chat_id}...")
             
@@ -42,7 +42,7 @@ async def get_all_members(chat_id):
                             limit=limit,
                             hash=0
                         )),
-                        timeout=60  # افزایش زمان timeout
+                        timeout=60
                     )
                     
                     if not participants or not participants.users:
@@ -59,6 +59,7 @@ async def get_all_members(chat_id):
                     offset += limit
                     print(f"📊 تاکنون {len(members)} عضو دریافت شد...")
                     
+                    # اگه تعداد برگشتی کمتر از limit بود، یعنی به انتها رسیدیم
                     if len(participants.users) < limit:
                         break
                         
