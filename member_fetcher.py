@@ -7,14 +7,35 @@ import config
 
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
-async def get_all_members(chat_id):
-    """دریافت همه اعضای گروه با Telethon - نسخه نهایی بدون محدودیت"""
+async def create_session_if_not_exists():
+    """ساخت خودکار فایل نشست اگر وجود نداشته باشد"""
+    if os.path.exists(SESSION_FILE):
+        print(f"✅ فایل نشست در مسیر {SESSION_FILE} وجود دارد.")
+        return True
+    
+    print(f"🔄 فایل نشست در مسیر {SESSION_FILE} پیدا نشد. در حال ساخت...")
+    
     try:
-        # ===== بررسی فایل نشست =====
-        if not os.path.exists(SESSION_FILE):
-            print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
+        client = TelegramClient(SESSION_FILE, config.API_ID, config.API_HASH)
+        await client.start()
+        me = await client.get_me()
+        print(f"✅ نشست با موفقیت ساخته شد: {me.first_name} (ID: {me.id})")
+        await client.disconnect()
+        return True
+    except Exception as e:
+        print(f"❌ خطا در ساخت نشست: {e}")
+        print("⚠️ لطفاً مطمئن شوید:")
+        print("  1️⃣ VPN روشن است")
+        print("  2️⃣ API_ID و API_HASH در config.py درست هستند")
+        return False
+
+async def get_all_members(chat_id):
+    """دریافت همه اعضای گروه با Telethon"""
+    try:
+        # ===== ساخت نشست اگر وجود نداشته باشد =====
+        if not await create_session_if_not_exists():
             return []
-            
+        
         print(f"✅ فایل نشست در مسیر {SESSION_FILE} پیدا شد.")
         
         client = TelegramClient(SESSION_FILE, config.API_ID, config.API_HASH)
@@ -22,7 +43,7 @@ async def get_all_members(chat_id):
         async with client:
             await client.start()
             
-            # ===== مرحله ۱: دریافت دیالوگ‌ها =====
+            # ===== دریافت دیالوگ‌ها =====
             print("🔄 در حال دریافت لیست گروه‌ها...")
             dialogs = await client.get_dialogs()
             print(f"✅ {len(dialogs)} گروه/چت پیدا شد.")
@@ -35,7 +56,7 @@ async def get_all_members(chat_id):
                     print(f"✅ گروه '{dialog.name}' در دیالوگ‌ها پیدا شد.")
                     break
             
-            # ===== مرحله ۲: اگر گروه در دیالوگ‌ها نبود =====
+            # ===== اگر گروه در دیالوگ‌ها نبود =====
             if entity is None:
                 print(f"⚠️ گروه {chat_id} در دیالوگ‌ها پیدا نشد.")
                 try:
@@ -49,10 +70,10 @@ async def get_all_members(chat_id):
                 print(f"❌ گروه پیدا نشد!")
                 return []
 
-            # ===== مرحله ۳: دریافت اعضا =====
+            # ===== دریافت اعضا =====
             members = []
             offset = 0
-            limit = 200  # حداکثر در هر درخواست
+            limit = 200
             
             print(f"⏳ در حال دریافت همه اعضای گروه...")
             
