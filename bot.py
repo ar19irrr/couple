@@ -24,7 +24,6 @@ from database import (
     get_global_blocked_users, add_global_blocked_user, 
     remove_global_blocked_user, is_user_globally_blocked
 )
-from member_fetcher import get_all_members
 
 # ==================== تقویم شمسی ====================
 try:
@@ -57,44 +56,6 @@ def load_faals():
 
 FAALS = load_faals()
 logger.info(f"✅ {len(FAALS)} فال بارگذاری شد")
-
-# ==================== ساخت خودکار نشست ====================
-async def create_session_automatically():
-    """ساخت خودکار فایل نشست در Render"""
-    try:
-        from telethon import TelegramClient
-        if not hasattr(config, 'API_ID') or not hasattr(config, 'API_HASH'):
-            logger.error("❌ API_ID یا API_HASH در config.py تنظیم نشده!")
-            return False
-        
-        client = TelegramClient('session', config.API_ID, config.API_HASH)
-        await client.start()
-        me = await client.get_me()
-        logger.info(f"✅ نشست ساخته شد: {me.first_name} (ID: {me.id})")
-        await client.disconnect()
-        return True
-    except Exception as e:
-        logger.error(f"❌ خطا در ساخت نشست: {e}")
-        return False
-
-def ensure_session():
-    """اطمینان از وجود فایل نشست"""
-    session_file = os.path.join(os.path.dirname(__file__), 'session.session')
-    if not os.path.exists(session_file):
-        logger.info("🔄 فایل نشست وجود ندارد. در حال ساخت...")
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(create_session_automatically())
-            loop.close()
-            if result:
-                logger.info("✅ نشست با موفقیت ساخته شد.")
-            else:
-                logger.error("❌ خطا در ساخت نشست. لطفاً config.py را بررسی کنید.")
-        except Exception as e:
-            logger.error(f"❌ خطا در ساخت نشست: {e}")
-    else:
-        logger.info(f"✅ فایل نشست در مسیر {session_file} وجود دارد.")
 
 # ==================== Flask ====================
 app = Flask(__name__)
@@ -166,29 +127,34 @@ GENDERS = {
     "other": "🌈 سایر"
 }
 
-def update_members_sync(chat_id):
+def get_admins_from_group(bot, chat_id):
+    """دریافت لیست ادمین‌های گروه (بدون Telethon)"""
     try:
-        logger.info(f"🔄 شروع دریافت اعضا برای گروه {chat_id}")
-        session_file = os.path.join(os.path.dirname(__file__), 'session.session')
-        if not os.path.exists(session_file):
-            logger.error(f"❌ فایل نشست در مسیر {session_file} پیدا نشد!")
-            return []
-        
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        members = loop.run_until_complete(get_all_members(chat_id))
-        loop.close()
-        
-        if members and isinstance(members, list) and len(members) > 0:
-            set_members(chat_id, members)
-            logger.info(f"✅ {len(members)} عضو برای گروه {chat_id} ذخیره شد")
-            return members
-        else:
-            logger.warning(f"⚠️ هیچ عضوی برای گروه {chat_id} پیدا نشد")
-            return []
-            
+        members = []
+        admins = bot.get_chat_administrators(chat_id)
+        for admin in admins:
+            user = admin.user
+            if not user.is_bot:
+                members.append({
+                    "id": user.id,
+                    "name": user.full_name or "بدون نام",
+                    "username": user.username or "ندارد"
+                })
+        return members
     except Exception as e:
-        logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}: {e}")
+        logger.error(f"❌ خطا در دریافت ادمین‌ها: {e}")
+        return []
+
+def update_members_sync(bot, chat_id):
+    """به‌روزرسانی لیست اعضا (فقط ادمین‌ها)"""
+    try:
+        members = get_admins_from_group(bot, chat_id)
+        if members:
+            set_members(chat_id, members)
+            logger.info(f"✅ {len(members)} ادمین پیدا شد و ذخیره شد")
+        return members
+    except Exception as e:
+        logger.error(f"❌ خطا در دریافت اعضا: {e}")
         return []
 
 def get_daily_fortune():
@@ -928,7 +894,7 @@ def addgroup_command(update: Update, context: CallbackContext):
     
     if add_group(chat_id):
         update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد.")
-        members = update_members_sync(chat_id)
+        members = update_members_sync(context.bot, chat_id)
         if members:
             update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
         else:
@@ -938,9 +904,8 @@ def addgroup_command(update: Update, context: CallbackContext):
 
 def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
-    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
+    update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا...")
     
-    # چک کردن ادمین بودن ربات
     try:
         bot_member = context.bot.get_chat_member(chat_id, context.bot.id)
         if bot_member.status not in ['administrator', 'creator']:
@@ -958,17 +923,11 @@ def update_command(update: Update, context: CallbackContext):
         update.message.reply_text("❌ خطا در بررسی دسترسی ربات.")
         return
     
-    members = update_members_sync(chat_id)
+    members = update_members_sync(context.bot, chat_id)
     if members:
         update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
     else:
-        update.message.reply_text(
-            "❌ خطا در دریافت اعضا.\n"
-            "لطفاً موارد زیر را بررسی کنید:\n"
-            "1️⃣ VPN روشن است\n"
-            "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
-            "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
-        )
+        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو ربات ادمین است.")
 
 def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -1187,7 +1146,7 @@ def daily_job(context: CallbackContext):
     bot = context.bot
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
-    members = update_members_sync(chat_id)
+    members = update_members_sync(bot, chat_id)
     if not members:
         bot.send_message(chat_id=chat_id, text="❌ خطا در دریافت لیست اعضا.")
         return
@@ -1249,10 +1208,6 @@ def schedule_daily_jobs(dispatcher):
 
 # ==================== اجرا ====================
 def main():
-    # ===== ساخت نشست اگر وجود نداشته باشد =====
-    ensure_session()
-    
-    # ===== اجرای Flask =====
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
