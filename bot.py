@@ -898,12 +898,35 @@ def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
     
+    # چک کردن اینکه ربات ادمین هست یا نه
+    try:
+        bot_member = context.bot.get_chat_member(chat_id, context.bot.id)
+        if bot_member.status not in ['administrator', 'creator']:
+            update.message.reply_text(
+                "❌ ربات ادمین گروه نیست!\n"
+                "لطفاً مراحل زیر را انجام دهید:\n"
+                "1️⃣ روی اسم ربات در گروه کلیک کنید\n"
+                "2️⃣ گزینه Make Admin را بزنید\n"
+                "3️⃣ تمام دسترسی‌ها را فعال کنید\n"
+                "4️⃣ دوباره /update را بزنید"
+            )
+            return
+    except Exception as e:
+        logger.error(f"❌ خطا در بررسی ادمین: {e}")
+        update.message.reply_text("❌ خطا در بررسی دسترسی ربات.")
+        return
+    
     members = update_members_sync(chat_id)
     if members:
         update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
     else:
-        update.message.reply_text("❌ خطا در دریافت اعضا. لطفاً VPN را روشن کنید و ربات را ادمین کنید.")
-
+        update.message.reply_text(
+            "❌ خطا در دریافت اعضا.\n"
+            "لطفاً موارد زیر را بررسی کنید:\n"
+            "1️⃣ VPN روشن است\n"
+            "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
+            "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
+        )
 def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     last = get_last_couple(chat_id)
