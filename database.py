@@ -103,18 +103,12 @@ def sync_groups():
 # ==================== اعضا ====================
 def get_members(chat_id):
     data = load_data()
-    members = data.get("members", {}).get(str(chat_id), [])
-    if not isinstance(members, list):
-        return []
-    return members
+    return data.get("members", {}).get(str(chat_id), [])  # هر گروه جداگانه
 
 def set_members(chat_id, members_list):
     data = load_data()
-    if not isinstance(members_list, list):
-        members_list = []
-    data["members"][str(chat_id)] = members_list
+    data["members"][str(chat_id)] = members_list  # ذخیره با chat_id
     save_data(data)
-
 # ==================== پروفایل کاربران ====================
 def get_user_profile(chat_id, user_id):
     data = load_data()
