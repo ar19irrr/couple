@@ -886,15 +886,14 @@ def addgroup_command(update: Update, context: CallbackContext):
         return
     
     if add_group(chat_id):
-        update.message.reply_text("✅ این گروه به لیست گروه‌های فعال اضافه شد.")
+        update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد. (ID: {chat_id})")
         members = update_members_sync(chat_id)
         if members:
             update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
         else:
             update.message.reply_text("❌ خطا در دریافت اعضا. لطفاً VPN را روشن کنید و ربات را ادمین کنید.")
     else:
-        update.message.reply_text(f"ℹ️ این گروه قبلاً به لیست اضافه شده است.")
-
+        update.message.reply_text(f"ℹ️ این گروه قبلاً به لیست اضافه شده است. (ID: {chat_id})")
 def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
