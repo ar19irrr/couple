@@ -11,7 +11,7 @@ SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 # برای هر گروه جدید، لینک دعوت رو اینجا اضافه کن
 INVITE_LINKS = {
     -1001290218006: "https://t.me/+SFfoan-FMMBmN2Y0",  # لینک گروه اول
-    -1001429243657: "https://t.me/+SFfoan-FMMBmN2Y0",  # لینک گروه دوم
+    -1001510907324: "https://t.me/+6TVF2Q1du4FmNmRk",  # لینک گروه دوم
 }
 
 async def get_all_members(chat_id):
