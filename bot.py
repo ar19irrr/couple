@@ -1234,6 +1234,10 @@ def schedule_daily_jobs(dispatcher):
 
 # ==================== اجرا ====================
 def main():
+    # ===== ساخت نشست اگر وجود نداشته باشد =====
+    ensure_session()
+    
+    # ===== اجرای Flask =====
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
@@ -1285,6 +1289,7 @@ def main():
     dp.add_handler(CallbackQueryHandler(button_callback))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
+    # ===== زمان‌بندی‌ها =====
     schedule_daily_jobs(dp)
     schedule_weekly_announcement(dp)
     
