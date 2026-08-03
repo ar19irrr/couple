@@ -27,7 +27,10 @@ from database import (
 from member_fetcher import get_all_members
 
 # ==================== تقویم شمسی ====================
-from rokh import get_today_events, get_events, DateSystem
+try:
+    from rokh import get_today_events, get_events, DateSystem
+except:
+    print("⚠️ rokh نصب نیست!")
 
 # ==================== تنظیمات لاگ ====================
 logging.basicConfig(
@@ -54,6 +57,44 @@ def load_faals():
 
 FAALS = load_faals()
 logger.info(f"✅ {len(FAALS)} فال بارگذاری شد")
+
+# ==================== ساخت خودکار نشست ====================
+async def create_session_automatically():
+    """ساخت خودکار فایل نشست در Render"""
+    try:
+        from telethon import TelegramClient
+        if not hasattr(config, 'API_ID') or not hasattr(config, 'API_HASH'):
+            logger.error("❌ API_ID یا API_HASH در config.py تنظیم نشده!")
+            return False
+        
+        client = TelegramClient('session', config.API_ID, config.API_HASH)
+        await client.start()
+        me = await client.get_me()
+        logger.info(f"✅ نشست ساخته شد: {me.first_name} (ID: {me.id})")
+        await client.disconnect()
+        return True
+    except Exception as e:
+        logger.error(f"❌ خطا در ساخت نشست: {e}")
+        return False
+
+def ensure_session():
+    """اطمینان از وجود فایل نشست"""
+    session_file = os.path.join(os.path.dirname(__file__), 'session.session')
+    if not os.path.exists(session_file):
+        logger.info("🔄 فایل نشست وجود ندارد. در حال ساخت...")
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(create_session_automatically())
+            loop.close()
+            if result:
+                logger.info("✅ نشست با موفقیت ساخته شد.")
+            else:
+                logger.error("❌ خطا در ساخت نشست. لطفاً config.py را بررسی کنید.")
+        except Exception as e:
+            logger.error(f"❌ خطا در ساخت نشست: {e}")
+    else:
+        logger.info(f"✅ فایل نشست در مسیر {session_file} وجود دارد.")
 
 # ==================== Flask ====================
 app = Flask(__name__)
@@ -886,19 +927,20 @@ def addgroup_command(update: Update, context: CallbackContext):
         return
     
     if add_group(chat_id):
-        update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد. (ID: {chat_id})")
+        update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد.")
         members = update_members_sync(chat_id)
         if members:
             update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
         else:
             update.message.reply_text("❌ خطا در دریافت اعضا. لطفاً VPN را روشن کنید و ربات را ادمین کنید.")
     else:
-        update.message.reply_text(f"ℹ️ این گروه قبلاً به لیست اضافه شده است. (ID: {chat_id})")
+        update.message.reply_text(f"ℹ️ این گروه قبلاً به لیست اضافه شده است.")
+
 def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا... (چند لحظه)")
     
-    # چک کردن اینکه ربات ادمین هست یا نه
+    # چک کردن ادمین بودن ربات
     try:
         bot_member = context.bot.get_chat_member(chat_id, context.bot.id)
         if bot_member.status not in ['administrator', 'creator']:
@@ -927,6 +969,7 @@ def update_command(update: Update, context: CallbackContext):
             "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
             "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
         )
+
 def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     last = get_last_couple(chat_id)
@@ -938,11 +981,9 @@ def last_command(update: Update, context: CallbackContext):
         update.message.reply_text(
             f"""📅 آخرین زوج ({date})
 
-👤 {u1.get('name', 'نامشخص')}
-یوزرنیم: @{u1.get('username', 'ندارد')}
+👤 [{u1.get('name', 'نامشخص')}](tg://user?id={u1.get('id')})
 ❤️ با ❤️
-👤 {u2.get('name', 'نامشخص')}
-یوزرنیم: @{u2.get('username', 'ندارد')}"""
+👤 [{u2.get('name', 'نامشخص')}](tg://user?id={u2.get('id')})"""
         )
     else:
         update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
@@ -974,9 +1015,9 @@ def history_command(update: Update, context: CallbackContext):
             u1 = couple.get("user1", {})
             u2 = couple.get("user2", {})
             date = couple.get("date", "")[:10]
-            msg += f"{i}. {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')} ({date})\n"
+            msg += f"{i}. [{u1.get('name', 'نامشخص')}](tg://user?id={u1.get('id')}) ❤️ [{u2.get('name', 'نامشخص')}](tg://user?id={u2.get('id')}) ({date})\n"
     
-    update.message.reply_text(msg)
+    update.message.reply_text(msg, parse_mode="Markdown")
 
 def stats_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -990,9 +1031,9 @@ def stats_command(update: Update, context: CallbackContext):
     if stats.get('last_couple') and isinstance(stats['last_couple'], dict):
         u1 = stats['last_couple'].get('user1', {})
         u2 = stats['last_couple'].get('user2', {})
-        msg += f"\n💖 آخرین زوج:\n👤 {u1.get('name', 'نامشخص')} ❤️ {u2.get('name', 'نامشخص')}"
+        msg += f"\n💖 آخرین زوج:\n👤 [{u1.get('name', 'نامشخص')}](tg://user?id={u1.get('id')}) ❤️ [{u2.get('name', 'نامشخص')}](tg://user?id={u2.get('id')})"
     
-    update.message.reply_text(msg)
+    update.message.reply_text(msg, parse_mode="Markdown")
 
 def mystats_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -1010,14 +1051,14 @@ def mystats_command(update: Update, context: CallbackContext):
         medals = ["🥇", "🥈", "🥉"]
         for i, partner in enumerate(partner_stats[:5]):
             medal = medals[i] if i < len(medals) else f"{i+1}."
-            msg += f"{medal} {partner['name']} (@{partner['username']}) — {partner['count']} بار\n"
+            msg += f"{medal} [{partner['name']}](tg://user?id={partner['id']}) — {partner['count']} بار\n"
         
         if len(partner_stats) > 5:
             msg += f"\nو {len(partner_stats) - 5} نفر دیگر..."
     else:
         msg += f"\n📭 هنوز با کسی لاور نشدی!"
     
-    update.message.reply_text(msg)
+    update.message.reply_text(msg, parse_mode="Markdown")
 
 def reset_command(update: Update, context: CallbackContext):
     clear_data()
@@ -1179,17 +1220,15 @@ def daily_job(context: CallbackContext):
 باهم بمیرید زنده شوید 
 {random.choice(JOKE_MESSAGES)}
 
-👤 {user1['name']}
-یوزرنیم: @{user1['username']}
+👤 [{user1['name']}](tg://user?id={user1['id']})
 ❤️ با ❤️
-👤 {user2['name']}
-یوزرنیم: @{user2['username']}
+👤 [{user2['name']}](tg://user?id={user2['id']})
 
 {random.choice(CELEBRATION_MESSAGES)}
 
 🌟 فال امروز: {fortune}"""
     
-    bot.send_message(chat_id=chat_id, text=msg)
+    bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
 
@@ -1210,6 +1249,10 @@ def schedule_daily_jobs(dispatcher):
 
 # ==================== اجرا ====================
 def main():
+    # ===== ساخت نشست اگر وجود نداشته باشد =====
+    ensure_session()
+    
+    # ===== اجرای Flask =====
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info("🌐 وب‌سرور Flask روی پورت ۱۰۰۰۰ شروع به کار کرد...")
