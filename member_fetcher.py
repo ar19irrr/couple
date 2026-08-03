@@ -1,41 +1,19 @@
 import os
 import asyncio
 from telethon import TelegramClient, errors
-from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.tl.functions.channels import GetParticipantsRequest, GetFullChannelRequest
 from telethon.tl.types import ChannelParticipantsSearch
 import config
 
 SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 
-async def create_session_if_not_exists():
-    """ساخت خودکار فایل نشست اگر وجود نداشته باشد"""
-    if os.path.exists(SESSION_FILE):
-        print(f"✅ فایل نشست در مسیر {SESSION_FILE} وجود دارد.")
-        return True
-    
-    print(f"🔄 فایل نشست در مسیر {SESSION_FILE} پیدا نشد. در حال ساخت...")
-    
-    try:
-        client = TelegramClient(SESSION_FILE, config.API_ID, config.API_HASH)
-        await client.start()
-        me = await client.get_me()
-        print(f"✅ نشست با موفقیت ساخته شد: {me.first_name} (ID: {me.id})")
-        await client.disconnect()
-        return True
-    except Exception as e:
-        print(f"❌ خطا در ساخت نشست: {e}")
-        print("⚠️ لطفاً مطمئن شوید:")
-        print("  1️⃣ VPN روشن است")
-        print("  2️⃣ API_ID و API_HASH در config.py درست هستند")
-        return False
-
 async def get_all_members(chat_id):
-    """دریافت همه اعضای گروه با Telethon - نسخه نهایی"""
+    """دریافت همه اعضای یک گروه با Telethon - روش پویا برای گروه‌های جدید"""
     try:
-        # ===== ساخت نشست اگر وجود نداشته باشد =====
-        if not await create_session_if_not_exists():
+        if not os.path.exists(SESSION_FILE):
+            print(f"❌ فایل نشست در مسیر {SESSION_FILE} پیدا نشد!")
             return []
-        
+            
         print(f"✅ فایل نشست در مسیر {SESSION_FILE} پیدا شد.")
         
         client = TelegramClient(SESSION_FILE, config.API_ID, config.API_HASH)
@@ -43,12 +21,13 @@ async def get_all_members(chat_id):
         async with client:
             await client.start()
             
-            # ===== دریافت دیالوگ‌ها =====
-            print("🔄 در حال دریافت لیست گروه‌ها...")
+            # ===== مرحله ۱: دریافت لیست تمام گروه‌ها (دیالوگ‌ها) =====
+            # این کار باعث می‌شود که Telethon گروه‌های جدید را "ببیند" و آن‌ها را به خاطر بسپارد
+            print("🔄 در حال دریافت لیست گروه‌های عضو...")
             dialogs = await client.get_dialogs()
             print(f"✅ {len(dialogs)} گروه/چت پیدا شد.")
             
-            # پیدا کردن گروه در دیالوگ‌ها
+            # ===== مرحله ۲: پیدا کردن گروه مورد نظر در دیالوگ‌ها =====
             entity = None
             for dialog in dialogs:
                 if dialog.is_group and dialog.id == chat_id:
@@ -56,12 +35,23 @@ async def get_all_members(chat_id):
                     print(f"✅ گروه '{dialog.name}' در دیالوگ‌ها پیدا شد.")
                     break
             
-            # ===== اگر گروه در دیالوگ‌ها نبود =====
+            # ===== مرحله ۳: اگر گروه در دیالوگ‌ها نبود، با روش مستقیم دریافتش کن =====
             if entity is None:
-                print(f"⚠️ گروه {chat_id} در دیالوگ‌ها پیدا نشد.")
+                print(f"⚠️ گروه {chat_id} در دیالوگ‌ها پیدا نشد. تلاش برای دریافت مستقیم...")
                 try:
+                    # تلاش برای دریافت گروه با شناسه عددی
                     entity = await client.get_entity(chat_id)
                     print(f"✅ گروه با شناسه {chat_id} پیدا شد.")
+                except ValueError as e:
+                    print(f"❌ خطا در دریافت گروه با شناسه: {e}")
+                    # تلاش با لینک دعوت (در صورت وجود)
+                    try:
+                        # اگر لینک دعوت گروه را دارید، می‌توانید از آن استفاده کنید
+                        # entity = await client.get_entity('https://t.me/joinchat/...')
+                        pass
+                    except:
+                        print("❌ هیچ راهی برای پیدا کردن گروه وجود ندارد.")
+                        return []
                 except Exception as e:
                     print(f"❌ خطا در دریافت گروه: {e}")
                     return []
@@ -70,7 +60,7 @@ async def get_all_members(chat_id):
                 print(f"❌ گروه پیدا نشد!")
                 return []
 
-            # ===== دریافت اعضا =====
+            # ===== مرحله ۴: دریافت اعضا =====
             members = []
             offset = 0
             limit = 200
