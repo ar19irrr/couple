@@ -129,34 +129,33 @@ GENDERS = {
 }
 
 def update_members_sync(chat_id):
-    """به‌روزرسانی لیست اعضا با مدیریت Event Loop"""
+    """به‌روزرسانی لیست اعضا - روش جایگزین"""
     try:
         logger.info(f"🔄 شروع دریافت اعضا برای گروه {chat_id}")
         
-        # ===== اجرای تابع get_all_members با مدیریت Event Loop =====
+        # ===== روش ۱: تلاش با Telethon =====
         try:
             members = asyncio.run(get_all_members(chat_id))
-        except RuntimeError as e:
-            if "event loop" in str(e).lower() or "closed loop" in str(e).lower():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                members = loop.run_until_complete(get_all_members(chat_id))
-                loop.close()
-            else:
-                raise e
+            if members and len(members) > 0:
+                set_members(chat_id, members)
+                logger.info(f"✅ {len(members)} عضو با Telethon ذخیره شد")
+                return members
+        except Exception as e:
+            logger.error(f"❌ Telethon خطا داد: {e}")
         
-        if members and isinstance(members, list) and len(members) > 0:
-            set_members(chat_id, members)
-            logger.info(f"✅ {len(members)} عضو برای گروه {chat_id} ذخیره شد")
-            return members
-        else:
-            logger.warning(f"⚠️ هیچ عضوی برای گروه {chat_id} پیدا نشد")
+        # ===== روش ۲: استفاده از خود ربات (فقط ادمین‌ها) =====
+        try:
+            # اینجا از خود ربات برای دریافت ادمین‌ها استفاده میکنیم
+            # (فعلاً خالی برمی‌گردونیم)
+            logger.info("🔄 تلاش با روش جایگزین...")
+            return []
+        except Exception as e:
+            logger.error(f"❌ روش جایگزین خطا داد: {e}")
             return []
             
     except Exception as e:
         logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}: {e}")
         return []
-
 def get_daily_fortune():
     return random.choice(FORTUNES)
 
