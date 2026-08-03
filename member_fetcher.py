@@ -30,7 +30,7 @@ async def create_session_if_not_exists():
         return False
 
 async def get_all_members(chat_id):
-    """دریافت همه اعضای گروه با Telethon"""
+    """دریافت همه اعضای گروه با Telethon - نسخه نهایی"""
     try:
         # ===== ساخت نشست اگر وجود نداشته باشد =====
         if not await create_session_if_not_exists():
