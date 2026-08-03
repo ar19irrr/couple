@@ -777,17 +777,15 @@ def couple_command(update: Update, context: CallbackContext):
 باهم بمیرید زنده شوید 
 {random.choice(JOKE_MESSAGES)}
 
-👤 {user1['name']}
-یوزرنیم: @{user1['username']}
+👤 [{user1['name']}](tg://user?id={user1['id']})
 ❤️ با ❤️
-👤 {user2['name']}
-یوزرنیم: @{user2['username']}
+👤 [{user2['name']}](tg://user?id={user2['id']})
 
 {random.choice(CELEBRATION_MESSAGES)}
 
 🌟 فال امروز: {fortune}"""
     
-    update.message.reply_text(msg)
+    update.message.reply_text(msg, parse_mode="Markdown")
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
