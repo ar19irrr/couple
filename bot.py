@@ -285,7 +285,6 @@ def start(update: Update, context: CallbackContext):
 /mystats - آمار شخصی شما 👤
 /weekly_top - برترین‌های هفته 🏆
 
-⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
     
     update.message.reply_text(start_text, parse_mode="Markdown")
 
@@ -359,7 +358,7 @@ def help_command(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━
 
 ✅ ربات باید ادمین گروه باشد
-✅ برای دریافت اعضا و AI، VPN روشن باشد
+✅ هر 4 ساعت یکبار لاور میکند
 ✅ هر کاربر بعد از لاور شدن، ۷ روز در لیست سیاه می‌رود
 ✅ با تمام شدن اعضا، لیست سیاه خودکار ریست می‌شود
 ✅ هوش مصنوعی ۱۰ پیام آخر را به خاطر می‌سپارد
@@ -380,7 +379,7 @@ def help_command(update: Update, context: CallbackContext):
     
     help_text += """
 ━━━━━━━━━━━━━━━━━━━━━
-🎉 ربات شما کامل است! لذت ببرید!
+🎉 ارادتمند شما AR19
     """
     update.message.reply_text(help_text)
 
