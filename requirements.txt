@@ -1,7 +1,5 @@
 python-telegram-bot==13.7
-telethon
 Flask
 openai
 rokh==0.4
 requests
-
