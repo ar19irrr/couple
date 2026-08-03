@@ -133,9 +133,8 @@ def update_members_sync(chat_id):
     try:
         logger.info(f"🔄 شروع دریافت اعضا برای گروه {chat_id}")
         
-        # ===== اجرای مستقیم =====
+        # ===== اجرای مستقیم با مدیریت Event Loop =====
         try:
-            # ایجاد حلقه جدید
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             members = loop.run_until_complete(get_all_members(chat_id))
