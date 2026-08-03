@@ -1056,7 +1056,7 @@ def schedule_daily_jobs(dispatcher):
     for chat_id in groups:
         job_queue.run_repeating(
             daily_job,
-            interval=86400,
+            interval=14400,
             first=10,
             context=chat_id
         )
