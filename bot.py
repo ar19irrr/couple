@@ -146,20 +146,16 @@ def get_admins_from_group(bot, chat_id):
         return []
 
 def update_members_sync(chat_id):
-    """به‌روزرسانی لیست اعضا با مدیریت Event Loop"""
+    """به‌روزرسانی لیست اعضا با مدیریت Event Loop و ساخت خودکار نشست"""
     try:
         logger.info(f"🔄 شروع دریافت اعضا برای گروه {chat_id}")
-        session_file = os.path.join(os.path.dirname(__file__), 'session.session')
-        if not os.path.exists(session_file):
-            logger.error(f"❌ فایل نشست در مسیر {session_file} پیدا نشد!")
-            return []
         
-        # ===== استفاده از asyncio.run() به جای new_event_loop =====
+        # ===== اجرای تابع get_all_members با مدیریت Event Loop =====
         try:
             members = asyncio.run(get_all_members(chat_id))
         except RuntimeError as e:
-            if "event loop" in str(e).lower():
-                # اگه Event Loop در حال اجراست، از روش جایگزین استفاده کن
+            if "event loop" in str(e).lower() or "closed loop" in str(e).lower():
+                # اگه Event Loop بسته شده، یه حلقه جدید بساز
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 members = loop.run_until_complete(get_all_members(chat_id))
