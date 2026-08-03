@@ -10,7 +10,7 @@ SESSION_FILE = os.path.join(os.path.dirname(__file__), 'session.session')
 # ==================== لینک‌های دعوت گروه‌ها ====================
 # برای هر گروه جدید، لینک دعوت رو اینجا اضافه کن
 INVITE_LINKS = {
-    -1001290218006: "https://t.me/joinchat/AAAAAAAAAAAAAAAAAAAA",  # لینک گروه اول
+    -1001290218006: "https://t.me/+SFfoan-FMMBmN2Y0",  # لینک گروه اول
     -1001429243657: "https://t.me/+SFfoan-FMMBmN2Y0",  # لینک گروه دوم
 }
 
