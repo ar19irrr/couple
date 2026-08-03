@@ -955,17 +955,6 @@ def update_command(update: Update, context: CallbackContext):
             "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
             "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
         )
-            return
-    except Exception as e:
-        logger.error(f"❌ خطا در بررسی ادمین: {e}")
-        update.message.reply_text("❌ خطا در بررسی دسترسی ربات.")
-        return
-    
-    members = update_members_sync(context.bot, chat_id)
-    if members:
-        update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
-    else:
-        update.message.reply_text("❌ خطا در دریافت اعضا. مطمئن شو ربات ادمین است.")
 
 def last_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -984,7 +973,6 @@ def last_command(update: Update, context: CallbackContext):
         )
     else:
         update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
-
 def count_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     members = get_members(chat_id)
