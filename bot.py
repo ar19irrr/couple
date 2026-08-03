@@ -145,16 +145,38 @@ def get_admins_from_group(bot, chat_id):
         logger.error(f"❌ خطا در دریافت ادمین‌ها: {e}")
         return []
 
-def update_members_sync(bot, chat_id):
-    """به‌روزرسانی لیست اعضا (فقط ادمین‌ها)"""
+def update_members_sync(chat_id):
+    """به‌روزرسانی لیست اعضا با مدیریت Event Loop"""
     try:
-        members = get_admins_from_group(bot, chat_id)
-        if members:
+        logger.info(f"🔄 شروع دریافت اعضا برای گروه {chat_id}")
+        session_file = os.path.join(os.path.dirname(__file__), 'session.session')
+        if not os.path.exists(session_file):
+            logger.error(f"❌ فایل نشست در مسیر {session_file} پیدا نشد!")
+            return []
+        
+        # ===== استفاده از asyncio.run() به جای new_event_loop =====
+        try:
+            members = asyncio.run(get_all_members(chat_id))
+        except RuntimeError as e:
+            if "event loop" in str(e).lower():
+                # اگه Event Loop در حال اجراست، از روش جایگزین استفاده کن
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                members = loop.run_until_complete(get_all_members(chat_id))
+                loop.close()
+            else:
+                raise e
+        
+        if members and isinstance(members, list) and len(members) > 0:
             set_members(chat_id, members)
-            logger.info(f"✅ {len(members)} ادمین پیدا شد و ذخیره شد")
-        return members
+            logger.info(f"✅ {len(members)} عضو برای گروه {chat_id} ذخیره شد")
+            return members
+        else:
+            logger.warning(f"⚠️ هیچ عضوی برای گروه {chat_id} پیدا نشد")
+            return []
+            
     except Exception as e:
-        logger.error(f"❌ خطا در دریافت اعضا: {e}")
+        logger.error(f"❌ خطا در دریافت اعضا برای گروه {chat_id}: {e}")
         return []
 
 def get_daily_fortune():
