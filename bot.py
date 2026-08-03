@@ -19,7 +19,7 @@ from database import (
     get_stats, clear_data, get_groups, add_group,
     get_user_couple_stats, get_user_total_couples,
     set_user_gender, set_user_interest, get_user_profile,
-    update_monthly_score, get_all_monthly_scores, reset_monthly_scores,
+    update_weekly_score, get_all_weekly_scores, reset_weekly_scores,
     check_and_reset_blocked, sync_groups, load_data,
     get_global_blocked_users, add_global_blocked_user, 
     remove_global_blocked_user, is_user_globally_blocked
@@ -155,6 +155,7 @@ def update_members_sync(chat_id):
     except Exception as e:
         logger.error(f"❌ خطا: {e}")
         return []
+
 def get_daily_fortune():
     return random.choice(FORTUNES)
 
@@ -243,7 +244,7 @@ def start(update: Update, context: CallbackContext):
 /couple - انتخاب زوج تصادفی 💞
 /stats - آمار گروه 📊
 /mystats - آمار شخصی شما 👤
-/monthly_top - برترین‌های ماه 🏆
+/weekly_top - برترین‌های هفته 🏆
 
 ⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
     
@@ -272,7 +273,7 @@ def help_command(update: Update, context: CallbackContext):
 📌 /history - تاریخچه ۱۰ زوج آخر
 📌 /stats - آمار کلی گروه
 📌 /mystats - آمار شخصی شما
-📌 /monthly_top - برترین‌های ماه
+📌 /weekly_top - برترین‌های هفته
 
 ━━━━━━━━━━━━━━━━━━━━━
 🧠 بخش هوش مصنوعی
@@ -770,8 +771,8 @@ def couple_command(update: Update, context: CallbackContext):
     user1, user2 = selected[0], selected[1]
     save_couple(chat_id, user1, user2)
     
-    update_monthly_score(chat_id, user1["id"])
-    update_monthly_score(chat_id, user2["id"])
+    update_weekly_score(chat_id, user1["id"])
+    update_weekly_score(chat_id, user2["id"])
     
     fortune = get_daily_fortune()
     
@@ -794,15 +795,16 @@ def couple_command(update: Update, context: CallbackContext):
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 
-def monthly_top_command(update: Update, context: CallbackContext):
+def weekly_top_command(update: Update, context: CallbackContext):
+    """نمایش برترین‌های هفته"""
     chat_id = update.effective_chat.id
     members = get_members(chat_id)
     user_map = {m["id"]: m for m in members}
     
-    monthly_scores = get_all_monthly_scores(chat_id)
-    sorted_users = sorted(monthly_scores.items(), key=lambda x: x[1], reverse=True)
+    weekly_scores = get_all_weekly_scores(chat_id)
+    sorted_users = sorted(weekly_scores.items(), key=lambda x: x[1], reverse=True)
     
-    msg = "🏆 برترین لاورهای ماه\n\n"
+    msg = "🏆 **برترین لاورهای هفته**\n\n"
     medals = ["🥇", "🥈", "🥉"]
     
     if sorted_users:
@@ -813,61 +815,75 @@ def monthly_top_command(update: Update, context: CallbackContext):
     else:
         msg += "📭 هنوز کسی امتیازی کسب نکرده!"
     
-    update.message.reply_text(msg)
+    update.message.reply_text(msg, parse_mode="Markdown")
 
-def announce_monthly_winners(chat_id, bot):
-    monthly_scores = get_all_monthly_scores(chat_id)
+def announce_weekly_winners(chat_id, bot):
+    """اعلام برنده‌های هفته با پیام هوش مصنوعی"""
+    weekly_scores = get_all_weekly_scores(chat_id)
     
-    if not monthly_scores:
+    if not weekly_scores:
         return
     
-    top_user_id = max(monthly_scores, key=monthly_scores.get)
-    top_score = monthly_scores[top_user_id]
+    top_user_id = max(weekly_scores, key=weekly_scores.get)
+    top_score = weekly_scores[top_user_id]
     members = get_members(chat_id)
     user_map = {m["id"]: m for m in members}
     top_user = user_map.get(int(top_user_id), {"name": "کاربر ناشناس"})
     
     try:
-        ai_prompt = f"یک پیام تبریک عاشقانه و شاد برای {top_user['name']} بنویس که برنده لاورهای ماه شده با {top_score} بار لاور شدن. پیام باید کوتاه، احساسی و پر از انرژی مثبت باشه."
+        ai_prompt = f"یک پیام تبریک عاشقانه و شاد برای {top_user['name']} بنویس که برنده لاورهای هفته شده با {top_score} بار لاور شدن. پیام باید کوتاه، احساسی و پر از انرژی مثبت باشه."
         ai_message = get_ai_response(ai_prompt)
         
         if ai_message:
-            msg = f"🌟 برنده لاورهای ماه 🌟\n\n"
+            msg = f"🌟 **برنده لاورهای هفته** 🌟\n\n"
             msg += f"👤 {top_user['name']} با {top_score} بار لاور شدن!\n\n"
             msg += f"💬 پیام ویژه:\n{ai_message}"
         else:
-            msg = f"🌟 برنده لاورهای ماه 🌟\n\n"
+            msg = f"🌟 **برنده لاورهای هفته** 🌟\n\n"
             msg += f"👤 {top_user['name']} با {top_score} بار لاور شدن!\n"
             msg += "🎉 تبریک میگم! تو بهترین لاوری! ❤️"
     except Exception as e:
         logger.error(f"❌ خطا در AI: {e}")
-        msg = f"🌟 برنده لاورهای ماه 🌟\n\n"
+        msg = f"🌟 **برنده لاورهای هفته** 🌟\n\n"
         msg += f"👤 {top_user['name']} با {top_score} بار لاور شدن!\n"
         msg += "🎉 تبریک میگم! تو بهترین لاوری! ❤️"
     
-    bot.send_message(chat_id=chat_id, text=msg)
-    reset_monthly_scores(chat_id)
+    bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
+    reset_weekly_scores(chat_id)
 
-def monthly_announcement_job(context):
+def weekly_announcement_job(context):
+    """کار اعلام برنده‌های هفته"""
     bot = context.job.context.bot
     groups = get_groups()
     for chat_id in groups:
-        announce_monthly_winners(chat_id, bot)
+        announce_weekly_winners(chat_id, bot)
 
-def schedule_monthly_announcement(dispatcher):
+def schedule_weekly_announcement(dispatcher):
+    """تنظیم برنامه برای اعلام برنده‌های هفته"""
     job_queue = dispatcher.job_queue
     if not job_queue:
         return
     
-    now = datetime.now()
-    next_month = (now.replace(day=1) + timedelta(days=32)).replace(day=1)
-    time_until_next_month = (next_month - now).total_seconds()
-    
-    job_queue.run_once(
-        monthly_announcement_job,
-        when=time_until_next_month,
+    # اجرا هر یکشنبه ساعت ۱۲ ظهر
+    from datetime import time
+    job_queue.run_daily(
+        weekly_announcement_job,
+        time=time(hour=12, minute=0),
+        days=(6,),  # یکشنبه = ۶ (در Python دوشنبه ۰ و یکشنبه ۶ است)
         context=dispatcher
     )
+
+def announce_monthly_winners(chat_id, bot):
+    """اعلام برنده‌های ماه (برای سازگاری با کد قدیمی)"""
+    pass
+
+def monthly_announcement_job(context):
+    """برای سازگاری با کد قدیمی"""
+    pass
+
+def schedule_monthly_announcement(dispatcher):
+    """برای سازگاری با کد قدیمی"""
+    pass
 
 def addgroup_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -1178,8 +1194,8 @@ def daily_job(context: CallbackContext):
     user1, user2 = random.sample(available_members, 2)
     save_couple(chat_id, user1, user2)
     
-    update_monthly_score(chat_id, user1["id"])
-    update_monthly_score(chat_id, user2["id"])
+    update_weekly_score(chat_id, user1["id"])
+    update_weekly_score(chat_id, user2["id"])
     
     fortune = get_daily_fortune()
     
@@ -1254,7 +1270,7 @@ def main():
     dp.add_handler(CommandHandler("history", history_command))
     dp.add_handler(CommandHandler("stats", stats_command))
     dp.add_handler(CommandHandler("mystats", mystats_command))
-    dp.add_handler(CommandHandler("monthly_top", monthly_top_command))
+    dp.add_handler(CommandHandler("weekly_top", weekly_top_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
     # ===== دستورات بلاک =====
@@ -1270,7 +1286,7 @@ def main():
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
     schedule_daily_jobs(dp)
-    schedule_monthly_announcement(dp)
+    schedule_weekly_announcement(dp)
     
     logger.info("🚀 ربات شروع به کار کرد...")
     updater.start_polling(drop_pending_updates=True, timeout=20)
