@@ -24,6 +24,7 @@ from database import (
     get_global_blocked_users, add_global_blocked_user, 
     remove_global_blocked_user, is_user_globally_blocked
 )
+from member_fetcher import get_all_members
 
 # ==================== تقویم شمسی ====================
 try:
@@ -127,26 +128,8 @@ GENDERS = {
     "other": "🌈 سایر"
 }
 
-def get_admins_from_group(bot, chat_id):
-    """دریافت لیست ادمین‌های گروه (بدون Telethon)"""
-    try:
-        members = []
-        admins = bot.get_chat_administrators(chat_id)
-        for admin in admins:
-            user = admin.user
-            if not user.is_bot:
-                members.append({
-                    "id": user.id,
-                    "name": user.full_name or "بدون نام",
-                    "username": user.username or "ندارد"
-                })
-        return members
-    except Exception as e:
-        logger.error(f"❌ خطا در دریافت ادمین‌ها: {e}")
-        return []
-
 def update_members_sync(chat_id):
-    """به‌روزرسانی لیست اعضا با مدیریت Event Loop و ساخت خودکار نشست"""
+    """به‌روزرسانی لیست اعضا با مدیریت Event Loop"""
     try:
         logger.info(f"🔄 شروع دریافت اعضا برای گروه {chat_id}")
         
@@ -155,7 +138,6 @@ def update_members_sync(chat_id):
             members = asyncio.run(get_all_members(chat_id))
         except RuntimeError as e:
             if "event loop" in str(e).lower() or "closed loop" in str(e).lower():
-                # اگه Event Loop بسته شده، یه حلقه جدید بساز
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 members = loop.run_until_complete(get_all_members(chat_id))
@@ -912,13 +894,20 @@ def addgroup_command(update: Update, context: CallbackContext):
     
     if add_group(chat_id):
         update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد.")
-        members = update_members_sync(chat_id)  # <--- فقط chat_id
+        members = update_members_sync(chat_id)
         if members:
             update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
         else:
-            update.message.reply_text("❌ خطا در دریافت اعضا. لطفاً VPN را روشن کنید و ربات را ادمین کنید.")
+            update.message.reply_text(
+                "❌ خطا در دریافت اعضا.\n"
+                "لطفاً موارد زیر را بررسی کنید:\n"
+                "1️⃣ VPN روشن است\n"
+                "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
+                "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
+            )
     else:
         update.message.reply_text(f"ℹ️ این گروه قبلاً به لیست اضافه شده است.")
+
 def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     update.message.reply_text("🔄 در حال به‌روزرسانی لیست همه اعضا...")
@@ -969,6 +958,7 @@ def last_command(update: Update, context: CallbackContext):
         )
     else:
         update.message.reply_text("❌ هنوز زوجی انتخاب نشده.")
+
 def count_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     members = get_members(chat_id)
@@ -1168,7 +1158,7 @@ def daily_job(context: CallbackContext):
     bot = context.bot
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
-    members = update_members_sync(chat_id)  # <--- فقط chat_id
+    members = update_members_sync(chat_id)
     if not members:
         bot.send_message(chat_id=chat_id, text="❌ خطا در دریافت لیست اعضا.")
         return
