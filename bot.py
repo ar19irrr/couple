@@ -1242,7 +1242,7 @@ def daily_job(context: CallbackContext):
 def schedule_daily_jobs(dispatcher):
     job_queue = dispatcher.job_queue
     if not job_queue:
-        logger.warning("⚠️ JobQueue در دسترس نیست!")
+        logger.error("❌ JobQueue در دسترس نیست! ربات نمی‌تواند زمان‌بندی کند.")
         return
     
     groups = get_groups()
@@ -1251,13 +1251,20 @@ def schedule_daily_jobs(dispatcher):
         return
     
     for chat_id in groups:
+        # حذف Jobهای قبلی
+        for job in job_queue.jobs():
+            if hasattr(job, 'context') and job.context == chat_id:
+                job.schedule_removal()
+                logger.info(f"🔄 Job قدیمی برای گروه {chat_id} حذف شد.")
+        
+        # تنظیم Job جدید
         job_queue.run_repeating(
             daily_job,
             interval=14400,  # ۴ ساعت
-            first=10,
+            first=30,
             context=chat_id
         )
-        logger.info(f"✅ کار روزانه برای گروه {chat_id} تنظیم شد.")
+        logger.info(f"✅ کار ۴ ساعته برای گروه {chat_id} تنظیم شد.")
 
 # ==================== اجرا ====================
 def main():
@@ -1276,9 +1283,13 @@ def main():
     except Exception as e:
         logger.warning(f"⚠️ خطا در پاک کردن Webhook: {e}")
     
+    # ===== Handler برای ریپلی =====
     dp.add_handler(MessageHandler(Filters.text & Filters.reply, handle_reply))
+    
+    # ===== Handler برای کلمه "فال" =====
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_fall_keyword))
     
+    # ===== دستورات =====
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("fall", fall_command))
@@ -1298,18 +1309,28 @@ def main():
     dp.add_handler(CommandHandler("weekly_top", weekly_top_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
+    # ===== دستورات بلاک =====
     dp.add_handler(CommandHandler("block", block_command))
     dp.add_handler(CommandHandler("unblock", unblock_command))
     dp.add_handler(CommandHandler("blocked_list", blocked_list_command))
     
+    # ===== دستورات مالک =====
     dp.add_handler(CommandHandler("owner_stats", owner_stats_command))
     dp.add_handler(CommandHandler("owner_users", owner_users_command))
     
+    # ===== CallbackQueryHandler =====
     dp.add_handler(CallbackQueryHandler(button_callback))
+    
+    # ===== MessageHandler برای AI =====
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_ai_message))
     
-    schedule_daily_jobs(dp)
-    schedule_weekly_announcement(dp)
+    # ===== زمان‌بندی‌ها =====
+    if updater.job_queue:
+        logger.info("✅ JobQueue در دسترس است.")
+        schedule_daily_jobs(dp)
+        schedule_weekly_announcement(dp)
+    else:
+        logger.error("❌ JobQueue در دسترس نیست! ربات نمی‌تواند زمان‌بندی کند.")
     
     logger.info("🚀 ربات شروع به کار کرد...")
     updater.start_polling(drop_pending_updates=True, timeout=20)
