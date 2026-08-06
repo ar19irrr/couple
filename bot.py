@@ -645,6 +645,10 @@ def ask_command(update: Update, context: CallbackContext):
 
 def handle_reply(update: Update, context: CallbackContext):
     try:
+        # ===== چک کردن وجود پیام =====
+        if not update.message:
+            return
+        
         if not update.message.reply_to_message:
             return
         
@@ -689,8 +693,9 @@ def handle_reply(update: Update, context: CallbackContext):
             
     except Exception as e:
         logger.error(f"❌ خطا در handle_reply: {e}")
-        update.message.reply_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
-
+        # ===== چک کردن وجود پیام برای ارسال خطا =====
+        if update.message:
+            update.message.reply_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
 def clear_history_command(update: Update, context: CallbackContext):
     context.user_data["chat_history"] = []
     update.message.reply_text("✅ تاریخچه مکالمه پاک شد!")
