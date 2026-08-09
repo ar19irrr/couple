@@ -1170,27 +1170,32 @@ def owner_users_command(update: Update, context: CallbackContext):
 
 def jobs_command(update: Update, context: CallbackContext):
     """نمایش Jobهای فعال (فقط مالک)"""
-    if update.effective_user.id != OWNER_ID:
+    user_id = update.effective_user.id
+    
+    if user_id != OWNER_ID:
+        update.message.reply_text("⛔ این دستور فقط برای مالک ربات در دسترس است.")
         return
     
     job_queue = context.dispatcher.job_queue
     if not job_queue:
-        update.message.reply_text("❌ JobQueue در دسترس نیست.")
+        update.message.reply_text("❌ JobQueue در دسترس نیست.\nاحتمالاً پکیج job-queue نصب نشده.")
         return
     
-    jobs = job_queue.jobs()
+    jobs = list(job_queue.jobs())
     if not jobs:
-        update.message.reply_text("📭 هیچ Job فعالی وجود ندارد.")
+        update.message.reply_text("📭 هیچ Job فعالی وجود ندارد.\n\nممکن است ربات تازه ریستارت شده باشد یا هنوز گروهی اضافه نکرده باشید.")
         return
     
     msg = "📋 **لیست Jobهای فعال:**\n\n"
     for job in jobs:
         name = job.name or "بدون نام"
-        next_run = job.next_t.strftime("%Y-%m-%d %H:%M:%S") if job.next_t else "نامشخص"
+        try:
+            next_run = job.next_t.strftime("%Y-%m-%d %H:%M:%S") if job.next_t else "نامشخص"
+        except:
+            next_run = "نامشخص"
         msg += f"• `{name}`\n  بعدی: `{next_run}`\n\n"
     
     update.message.reply_text(msg, parse_mode="Markdown")
-
 # ==================== AI Message Handler ====================
 def ai_response(text):
     text_lower = text.lower()
