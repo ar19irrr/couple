@@ -266,6 +266,7 @@ def start(update: Update, context: CallbackContext):
 /blocked_list - لیست کاربران بلاک شده
 /owner_stats - آمار کلی ربات
 /owner_users - لیست کاربران
+/jobs - نمایش Jobهای فعال
 """
     else:
         start_text = """🤖 **ربات زوج‌یاب پیشرفته با هوش مصنوعی**
@@ -372,6 +373,7 @@ def help_command(update: Update, context: CallbackContext):
 📌 /blocked_list - لیست کاربران بلاک شده
 📌 /owner_stats - آمار کلی ربات
 📌 /owner_users - لیست کاربران ثبت‌شده
+📌 /jobs - نمایش Jobهای فعال
 """
     
     help_text += """
@@ -645,7 +647,6 @@ def ask_command(update: Update, context: CallbackContext):
 
 def handle_reply(update: Update, context: CallbackContext):
     try:
-        # ===== چک کردن وجود پیام =====
         if not update.message:
             return
         
@@ -693,9 +694,9 @@ def handle_reply(update: Update, context: CallbackContext):
             
     except Exception as e:
         logger.error(f"❌ خطا در handle_reply: {e}")
-        # ===== چک کردن وجود پیام برای ارسال خطا =====
         if update.message:
             update.message.reply_text("❌ خطایی رخ داد. لطفاً بعداً تلاش کنید.")
+
 def clear_history_command(update: Update, context: CallbackContext):
     context.user_data["chat_history"] = []
     update.message.reply_text("✅ تاریخچه مکالمه پاک شد!")
@@ -902,14 +903,20 @@ def schedule_weekly_announcement(dispatcher):
     job_queue = dispatcher.job_queue
     if not job_queue:
         return
-    
+
+    # حذف Job قبلی هفتگی اگر وجود دارد
+    for job in job_queue.get_jobs_by_name("weekly_announcement"):
+        job.schedule_removal()
+
     from datetime import time
     job_queue.run_daily(
         weekly_announcement_job,
         time=time(hour=12, minute=0),
-        days=(6,),
-        context=dispatcher
+        days=(6,),  # یکشنبه
+        context=dispatcher,
+        name="weekly_announcement"
     )
+    logger.info("✅ اعلام برترین‌های هفته برای یکشنبه‌ها ساعت ۱۲ تنظیم شد.")
 
 # ==================== بقیه دستورات ====================
 def addgroup_command(update: Update, context: CallbackContext):
@@ -935,6 +942,10 @@ def addgroup_command(update: Update, context: CallbackContext):
     
     if add_group(chat_id):
         update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد.")
+        
+        # ===== زمان‌بندی Job برای گروه جدید =====
+        schedule_job_for_group(context.dispatcher, chat_id)
+        
         members = update_members_sync(chat_id)
         if members:
             update.message.reply_text(f"✅ {len(members)} عضو پیدا شد و ذخیره گردید.")
@@ -944,10 +955,12 @@ def addgroup_command(update: Update, context: CallbackContext):
                 "لطفاً موارد زیر را بررسی کنید:\n"
                 "1️⃣ VPN روشن است\n"
                 "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
-                "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
+                "3️⃣ فایل session.session وجود دارد"
             )
     else:
         update.message.reply_text(f"ℹ️ این گروه قبلاً به لیست اضافه شده است.")
+        # حتی اگر قبلاً اضافه شده، مطمئن شو Job دارد
+        schedule_job_for_group(context.dispatcher, chat_id)
 
 def update_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -979,7 +992,7 @@ def update_command(update: Update, context: CallbackContext):
             "لطفاً موارد زیر را بررسی کنید:\n"
             "1️⃣ VPN روشن است\n"
             "2️⃣ ربات ادمین گروه است (با تمام دسترسی‌ها)\n"
-            "3️⃣ فایل session.session در گیت‌هاب وجود دارد"
+            "3️⃣ فایل session.session وجود دارد"
         )
 
 def last_command(update: Update, context: CallbackContext):
@@ -1155,6 +1168,29 @@ def owner_users_command(update: Update, context: CallbackContext):
     
     update.message.reply_text(msg)
 
+def jobs_command(update: Update, context: CallbackContext):
+    """نمایش Jobهای فعال (فقط مالک)"""
+    if update.effective_user.id != OWNER_ID:
+        return
+    
+    job_queue = context.dispatcher.job_queue
+    if not job_queue:
+        update.message.reply_text("❌ JobQueue در دسترس نیست.")
+        return
+    
+    jobs = job_queue.jobs()
+    if not jobs:
+        update.message.reply_text("📭 هیچ Job فعالی وجود ندارد.")
+        return
+    
+    msg = "📋 **لیست Jobهای فعال:**\n\n"
+    for job in jobs:
+        name = job.name or "بدون نام"
+        next_run = job.next_t.strftime("%Y-%m-%d %H:%M:%S") if job.next_t else "نامشخص"
+        msg += f"• `{name}`\n  بعدی: `{next_run}`\n\n"
+    
+    update.message.reply_text(msg, parse_mode="Markdown")
+
 # ==================== AI Message Handler ====================
 def ai_response(text):
     text_lower = text.lower()
@@ -1244,32 +1280,44 @@ def daily_job(context: CallbackContext):
     clear_blocked_users(chat_id)
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
 
+def schedule_job_for_group(dispatcher, chat_id):
+    """زمان‌بندی Job چهارساعته برای یک گروه خاص"""
+    job_queue = dispatcher.job_queue
+    if not job_queue:
+        logger.error(f"❌ JobQueue در دسترس نیست. نمی‌توانم برای گروه {chat_id} زمان‌بندی کنم.")
+        return False
+
+    # حذف Jobهای قبلی همین گروه
+    current_jobs = job_queue.get_jobs_by_name(f"daily_couple_{chat_id}")
+    for job in current_jobs:
+        job.schedule_removal()
+        logger.info(f"🔄 Job قدیمی برای گروه {chat_id} حذف شد.")
+
+    job_queue.run_repeating(
+        daily_job,
+        interval=14400,          # ۴ ساعت
+        first=45,
+        context=chat_id,
+        name=f"daily_couple_{chat_id}"
+    )
+    logger.info(f"✅ کار ۴ ساعته برای گروه {chat_id} با موفقیت تنظیم شد.")
+    return True
+
 def schedule_daily_jobs(dispatcher):
     job_queue = dispatcher.job_queue
     if not job_queue:
         logger.error("❌ JobQueue در دسترس نیست! ربات نمی‌تواند زمان‌بندی کند.")
+        logger.error("💡 مطمئن شو که python-telegram-bot را با extra job-queue نصب کرده‌ای:")
+        logger.error("   pip install 'python-telegram-bot[job-queue]==13.15'")
         return
-    
+
     groups = get_groups()
     if not groups:
         logger.info("ℹ️ هیچ گروه فعالی برای زمان‌بندی یافت نشد.")
         return
-    
+
     for chat_id in groups:
-        # حذف Jobهای قبلی
-        for job in job_queue.jobs():
-            if hasattr(job, 'context') and job.context == chat_id:
-                job.schedule_removal()
-                logger.info(f"🔄 Job قدیمی برای گروه {chat_id} حذف شد.")
-        
-        # تنظیم Job جدید
-        job_queue.run_repeating(
-            daily_job,
-            interval=14400,  # ۴ ساعت
-            first=30,
-            context=chat_id
-        )
-        logger.info(f"✅ کار ۴ ساعته برای گروه {chat_id} تنظیم شد.")
+        schedule_job_for_group(dispatcher, chat_id)
 
 # ==================== اجرا ====================
 def main():
@@ -1322,6 +1370,7 @@ def main():
     # ===== دستورات مالک =====
     dp.add_handler(CommandHandler("owner_stats", owner_stats_command))
     dp.add_handler(CommandHandler("owner_users", owner_users_command))
+    dp.add_handler(CommandHandler("jobs", jobs_command))
     
     # ===== CallbackQueryHandler =====
     dp.add_handler(CallbackQueryHandler(button_callback))
