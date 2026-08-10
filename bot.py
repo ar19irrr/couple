@@ -24,7 +24,6 @@ from database import (
     remove_global_blocked_user, is_user_globally_blocked,
     # دستاوردها
     get_user_achievements, unlock_achievement, get_all_achievements_info, ACHIEVEMENTS,
-    # آمار پیشرفته دستاورد
     get_user_extra_stats, update_user_extra_stats, 
     increment_command_count, record_couple_for_achievements
 )
@@ -44,6 +43,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 OWNER_ID = 1095925103
+OWNER_ACHIEVEMENT_ID = 385926147
 
 # ==================== بارگذاری فال‌ها ====================
 FAL_FILE = os.path.join(os.path.dirname(__file__), 'fal.json')
@@ -251,63 +251,26 @@ def get_ai_response(prompt):
 def is_user_blocked(user_id):
     return is_user_globally_blocked(user_id)
 
-# ==================== دستورات ====================
-def start(update: Update, context: CallbackContext):
-    user_id = update.effective_user.id
-    
-    if user_id == OWNER_ID:
-        start_text = """🤖 **ربات زوج‌یاب پیشرفته با هوش مصنوعی**
-
-📌 دستورات سریع:
-/ask <سوال> - پرسش از هوش مصنوعی 🧠
-/event - مناسبت‌های امروز 📅
-/fall - فال حافظ 🕌
-/couple - انتخاب زوج تصادفی 💞
-
-👑 **دستورات مالک:**
-/block <id> - بلاک کردن کاربر
-/unblock <id> - آنبلاک کردن کاربر
-/blocked_list - لیست کاربران بلاک شده
-/owner_stats - آمار کلی ربات
-/owner_users - لیست کاربران
-/jobs - نمایش Jobهای فعال
-"""
-    else:
-        start_text = """🤖 **ربات زوج‌یاب پیشرفته با هوش مصنوعی**
-
-📌 برای مشاهده راهنمای کامل دستورات، از دستور /help استفاده کنید.
-
-📌 دستورات سریع:
-/ask <سوال> - پرسش از هوش مصنوعی 🧠
-/event - مناسبت‌های امروز 📅
-/fall - فال حافظ 🕌
-/couple - انتخاب زوج تصادفی 💞
-/stats - آمار گروه 📊
-/mystats - آمار شخصی شما 👤
-/weekly_top - برترین‌های هفته 🏆
-
-⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
-    
-    update.message.reply_text(start_text, parse_mode="Markdown")
+# ==================== سیستم دستاورد ====================
+def safe_check_achievements(chat_id, user_id, user_name, bot, partner_id=None, is_auto=False):
+    try:
+        check_and_unlock_achievements(chat_id, user_id, user_name, partner_id, bot, is_auto)
+    except Exception as e:
+        logger.error(f"❌ خطا در چک دستاورد: {e}")
 
 def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, bot=None, is_auto=False):
-    """چک کردن و آنلاک کردن همه ۵۰ دستاورد"""
-    from datetime import datetime, timedelta
-    
     newly_unlocked = []
     
-    # آمار پایه
     total = get_user_total_couples(chat_id, user_id)
     partner_stats = get_user_couple_stats(chat_id, user_id)
     unique_partners = len(partner_stats)
-    unlocked = get_user_achievements(chat_id, user_id)
     extra = get_user_extra_stats(chat_id, user_id)
     
     now = datetime.now()
     hour = now.hour
-    weekday = now.weekday()  # 0=دوشنبه ... 4=جمعه، 5=شنبه
+    weekday = now.weekday()
 
-    # ---------- سری ۱ ----------
+    # تعداد لاور
     if total >= 1 and unlock_achievement(chat_id, user_id, "first_love"):
         newly_unlocked.append("first_love")
     if total >= 5 and unlock_achievement(chat_id, user_id, "beginner"):
@@ -359,7 +322,6 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
         if extra.get("morning_count", 0) >= 10 and unlock_achievement(chat_id, user_id, "morning_person"):
             newly_unlocked.append("morning_person")
 
-    # آخر هفته (جمعه=۴ ، شنبه=۵)
     if weekday in [4, 5] and unlock_achievement(chat_id, user_id, "weekend_lover"):
         newly_unlocked.append("weekend_lover")
 
@@ -367,10 +329,11 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
     streak = extra.get("current_streak", 0)
     if streak >= 3 and unlock_achievement(chat_id, user_id, "streak_3"):
         newly_unlocked.append("streak_3")
-    if streak >= 7 and unlock_achievement(chat_id, user_id, "streak_7"):
-        newly_unlocked.append("streak_7")
-    if streak >= 7 and unlock_achievement(chat_id, user_id, "unstoppable"):
-        newly_unlocked.append("unstoppable")
+    if streak >= 7:
+        if unlock_achievement(chat_id, user_id, "streak_7"):
+            newly_unlocked.append("streak_7")
+        if unlock_achievement(chat_id, user_id, "unstoppable"):
+            newly_unlocked.append("unstoppable")
     if streak >= 15 and unlock_achievement(chat_id, user_id, "streak_15"):
         newly_unlocked.append("streak_15")
 
@@ -385,19 +348,17 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
         except:
             pass
 
-    # لاور سریالی (۵ بار در یک روز)
+    # لاور سریالی
     today_str = now.strftime("%Y-%m-%d")
     if extra.get("daily_count", {}).get(today_str, 0) >= 5:
         if unlock_achievement(chat_id, user_id, "serial_lover"):
             newly_unlocked.append("serial_lover")
 
-    # روح (فقط خودکار)
-    if extra.get("auto_count", 0) >= 10 and unlock_achievement(chat_id, user_id, "ghost"):
-        newly_unlocked.append("ghost")
-
-    # عاشق ساکت
-    if extra.get("auto_count", 0) >= 10 and extra.get("manual_count", 0) == 0:
-        if unlock_achievement(chat_id, user_id, "silent_lover"):
+    # روح و عاشق ساکت
+    if extra.get("auto_count", 0) >= 10:
+        if unlock_achievement(chat_id, user_id, "ghost"):
+            newly_unlocked.append("ghost")
+        if extra.get("manual_count", 0) == 0 and unlock_achievement(chat_id, user_id, "silent_lover"):
             newly_unlocked.append("silent_lover")
 
     # شعله دوقلو
@@ -406,13 +367,13 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
         if unlock_achievement(chat_id, user_id, "twin_flame"):
             newly_unlocked.append("twin_flame")
 
-    # پروفایل کامل
+    # پروفایل
     profile = get_user_profile(chat_id, user_id)
     if profile.get("gender") and profile.get("interest"):
         if unlock_achievement(chat_id, user_id, "profile_master"):
             newly_unlocked.append("profile_master")
 
-    # مچ کامل و تضاد جذاب
+    # مچ کامل و تضاد جذاب + لاور مالک
     if partner_id:
         partner_profile = get_user_profile(chat_id, partner_id)
         user_interest = profile.get("interest")
@@ -423,17 +384,15 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
         if user_interest and partner_interest and user_interest == partner_interest:
             if unlock_achievement(chat_id, user_id, "perfect_match"):
                 newly_unlocked.append("perfect_match")
-
-            # لاور شدن با مالک ربات
-    OWNER_ACHIEVEMENT_ID = 385926147
-    if partner_id and int(partner_id) == OWNER_ACHIEVEMENT_ID:
-        if unlock_achievement(chat_id, user_id, "owner_lover"):
-            newly_unlocked.append("owner_lover")
                 
         if user_gender in ["male", "female"] and partner_gender in ["male", "female"]:
             if user_gender != partner_gender:
                 if unlock_achievement(chat_id, user_id, "opposite_attract"):
                     newly_unlocked.append("opposite_attract")
+        
+        if int(partner_id) == OWNER_ACHIEVEMENT_ID:
+            if unlock_achievement(chat_id, user_id, "owner_lover"):
+                newly_unlocked.append("owner_lover")
 
     # تعداد دستورات
     if extra.get("couple_commands", 0) >= 50 and unlock_achievement(chat_id, user_id, "command_king"):
@@ -461,7 +420,7 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
         except:
             pass
 
-    # ---------- اعلام دستاوردهای جدید ----------
+    # اعلام دستاوردهای جدید
     if newly_unlocked and bot:
         for ach_id in newly_unlocked:
             ach = ACHIEVEMENTS.get(ach_id, {})
@@ -469,7 +428,6 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
             emoji = ach.get("emoji", "🏅")
             desc = ach.get("description", "")
 
-            # پیام گروه
             try:
                 bot.send_message(
                     chat_id=chat_id,
@@ -482,7 +440,6 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
             except:
                 pass
 
-            # پیام خصوصی
             try:
                 bot.send_message(
                     chat_id=user_id,
@@ -492,6 +449,48 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
                 pass
 
     return newly_unlocked
+
+# ==================== دستورات ====================
+def start(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    
+    if user_id == OWNER_ID:
+        start_text = """🤖 **ربات زوج‌یاب پیشرفته با هوش مصنوعی**
+
+📌 دستورات سریع:
+/ask <سوال> - پرسش از هوش مصنوعی 🧠
+/event - مناسبت‌های امروز 📅
+/fall - فال حافظ 🕌
+/couple - انتخاب زوج تصادفی 💞
+/achievements - دستاوردهای شما 🏆
+
+👑 **دستورات مالک:**
+/block <id> - بلاک کردن کاربر
+/unblock <id> - آنبلاک کردن کاربر
+/blocked_list - لیست کاربران بلاک شده
+/owner_stats - آمار کلی ربات
+/owner_users - لیست کاربران
+/jobs - نمایش Jobهای فعال
+/force_schedule - اجبار ساخت Jobها
+"""
+    else:
+        start_text = """🤖 **ربات زوج‌یاب پیشرفته با هوش مصنوعی**
+
+📌 برای مشاهده راهنمای کامل دستورات، از دستور /help استفاده کنید.
+
+📌 دستورات سریع:
+/ask <سوال> - پرسش از هوش مصنوعی 🧠
+/event - مناسبت‌های امروز 📅
+/fall - فال حافظ 🕌
+/couple - انتخاب زوج تصادفی 💞
+/achievements - دستاوردهای شما 🏆
+/stats - آمار گروه 📊
+/mystats - آمار شخصی شما 👤
+/weekly_top - برترین‌های هفته 🏆
+
+⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
+    
+    update.message.reply_text(start_text, parse_mode="Markdown")
 
 def help_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -519,7 +518,7 @@ def help_command(update: Update, context: CallbackContext):
 📌 /weekly_top - برترین‌های هفته
 
 ━━━━━━━━━━━━━━━━━━━━━
-🏆 سیستم دستاورد (۵۰ مدال)
+🏆 سیستم دستاورد (۵۱ مدال)
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /achievements - مشاهده دستاوردهای خودت
@@ -585,7 +584,8 @@ def help_command(update: Update, context: CallbackContext):
 📌 /ask <سوال> - پرسش سوال از هوش مصنوعی
    مثال: /ask بهترین فیلم تاریخ چیست؟
 
-📌 ریپلی کنید - روی پیام ربات ریپلی کنید تا مکالمه ادامه پیدا کند
+📌 ریپلی کنید - روی پیام ربات ریپلی کنید
+   تا مکالمه ادامه پیدا کند (بدون نیاز به /ask)
 
 📌 /clear_history - پاک کردن تاریخچه مکالمه
 
@@ -601,14 +601,16 @@ def help_command(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━
 
 📌 /fall - گرفتن فال حافظ با تفسیر
-📌 کلمه «فال» - فقط کلمه فال را بفرستید
+📌 کلمه «فال» - فقط کلمه فال را بفرستید تا فال دریافت کنید
 
 ━━━━━━━━━━━━━━━━━━━━━
 ⚙️ تنظیمات پروفایل
 ━━━━━━━━━━━━━━━━━━━━━
 
-📌 /setgender - تنظیم جنسیت
-📌 /setinterest - تنظیم علاقه
+📌 /setgender - تنظیم جنسیت (با دکمه)
+📌 /setinterest - تنظیم علاقه (با دکمه)
+
+تنظیم جنسیت و علاقه باعث می‌شود انتخاب زوج دقیق‌تر انجام شود و دستاوردهای مرتبط باز شوند.
 
 ━━━━━━━━━━━━━━━━━━━━━
 🔧 مدیریت گروه (فقط ادمین)
@@ -624,7 +626,8 @@ def help_command(update: Update, context: CallbackContext):
 
 ✅ ربات باید ادمین گروه باشد
 ✅ برای دریافت اعضا و هوش مصنوعی، VPN روشن باشد
-✅ سیستم بلک‌لیست حذف شده است
+✅ سیستم بلک‌لیست حذف شده و همه همیشه قابل انتخاب هستند
+✅ هوش مصنوعی ۱۰ پیام آخر را به خاطر می‌سپارد
 ✅ با لاور شدن و استفاده از دستورات، دستاورد جمع کنید
 """
     
@@ -634,13 +637,13 @@ def help_command(update: Update, context: CallbackContext):
 👑 دستورات مالک
 ━━━━━━━━━━━━━━━━━━━━━
 
-📌 /block <id> - بلاک کردن کاربر
-📌 /unblock <id> - آنبلاک کردن کاربر
+📌 /block <id> - بلاک کردن یک کاربر
+📌 /unblock <id> - آنبلاک کردن یک کاربر
 📌 /blocked_list - لیست کاربران بلاک شده
 📌 /owner_stats - آمار کلی ربات
 📌 /owner_users - لیست کاربران ثبت‌شده
 📌 /jobs - نمایش Jobهای فعال
-📌 /force_schedule - اجبار به ساخت Jobها
+📌 /force_schedule - اجبار به ساخت Jobهای چهارساعته
 """
     
     help_text += """
@@ -648,7 +651,30 @@ def help_command(update: Update, context: CallbackContext):
 دوستدار شما AR19
 """
     update.message.reply_text(help_text)
+
+def achievements_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    user_id = user.id
+    user_name = user.first_name or "کاربر"
     
+    unlocked = get_user_achievements(chat_id, user_id)
+    all_achievements = get_all_achievements_info()
+    
+    msg = f"🏆 **دستاوردهای {user_name}**\n\n"
+    
+    if not unlocked:
+        msg += "📭 هنوز هیچ دستاوردی نگرفتی!\nبا لاور شدن می‌تونی مدال جمع کنی."
+    else:
+        for ach_id in unlocked:
+            ach = all_achievements.get(ach_id, {})
+            msg += f"{ach.get('emoji', '🏅')} **{ach.get('name', ach_id)}**\n"
+            msg += f"   └ {ach.get('description', '')}\n\n"
+    
+    msg += f"\n📊 تعداد دستاورد: {len(unlocked)} از {len(all_achievements)}"
+    
+    update.message.reply_text(msg, parse_mode="Markdown")
+
 # ==================== دستورات بلاک ====================
 def block_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -757,8 +783,8 @@ def fall_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
     
-    # افزایش شمارنده فال
     increment_command_count(chat_id, user_id, "fall")
+    safe_check_achievements(chat_id, user_id, update.effective_user.first_name or "کاربر", context.bot)
     
     msg = update.message.reply_text("🔮 در حال گرفتن فال حافظ...")
     
@@ -871,8 +897,8 @@ def ask_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
     
-    # افزایش شمارنده پرسش از هوش مصنوعی
     increment_command_count(chat_id, user_id, "ask")
+    safe_check_achievements(chat_id, user_id, update.effective_user.first_name or "کاربر", context.bot)
     
     user_message = ' '.join(context.args)
     reply_to_message = update.message.reply_to_message
@@ -928,6 +954,7 @@ def handle_reply(update: Update, context: CallbackContext):
     try:
         if not update.message:
             return
+        
         if not update.message.reply_to_message:
             return
         
@@ -943,10 +970,10 @@ def handle_reply(update: Update, context: CallbackContext):
         if not user_message:
             return
         
-        # افزایش شمارنده
         chat_id = update.effective_chat.id
         user_id = update.effective_user.id
         increment_command_count(chat_id, user_id, "ask")
+        safe_check_achievements(chat_id, user_id, update.effective_user.first_name or "کاربر", context.bot)
         
         loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
         
@@ -1020,6 +1047,7 @@ def button_callback(update: Update, context: CallbackContext):
     
     chat_id = query.message.chat_id
     user_id = query.from_user.id
+    user_name = query.from_user.first_name or "کاربر"
     data = query.data
     
     if data.startswith("gender_"):
@@ -1027,12 +1055,14 @@ def button_callback(update: Update, context: CallbackContext):
         set_user_gender(chat_id, user_id, gender)
         gender_label = GENDERS.get(gender, gender)
         query.edit_message_text(f"✅ جنسیت شما به {gender_label} تنظیم شد!")
+        safe_check_achievements(chat_id, user_id, user_name, context.bot)
     
     elif data.startswith("interest_"):
         interest = data.replace("interest_", "")
         set_user_interest(chat_id, user_id, interest)
         interest_label = INTERESTS.get(interest, {}).get("label", interest)
         query.edit_message_text(f"✅ علاقه شما به {interest_label} تنظیم شد!")
+        safe_check_achievements(chat_id, user_id, user_name, context.bot)
 
 # ==================== انتخاب زوج ====================
 def couple_command(update: Update, context: CallbackContext):
@@ -1046,13 +1076,12 @@ def couple_command(update: Update, context: CallbackContext):
         update.message.reply_text("❌ تعداد اعضا کافی نیست. ابتدا /update را بزنید.")
         return
     
-    # افزایش شمارنده دستور
     increment_command_count(chat_id, user_id, "couple")
     
     user_profile = get_user_profile(chat_id, user_id)
     user_gender = user_profile.get("gender")
     
-    # فیلتر بر اساس جنسیت (اگر تنظیم شده باشد)
+    # فیلتر بر اساس جنسیت
     if user_gender in ["male", "female"]:
         opposite = "female" if user_gender == "male" else "male"
         filtered = []
@@ -1077,23 +1106,17 @@ def couple_command(update: Update, context: CallbackContext):
             m for m in available_members 
             if get_user_profile(chat_id, m["id"]).get("interest") == user_interest
         ]
-        if len(interest_matched) >= 2:
-            selected = random.sample(interest_matched, 2)
-        else:
-            selected = random.sample(available_members, 2)
+        selected = random.sample(interest_matched, 2) if len(interest_matched) >= 2 else random.sample(available_members, 2)
     else:
         selected = random.sample(available_members, 2)
     
     user1, user2 = selected[0], selected[1]
     
-    # ذخیره زوج
     save_couple(chat_id, user1, user2)
     
-    # امتیاز هفتگی
     update_weekly_score(chat_id, user1["id"])
     update_weekly_score(chat_id, user2["id"])
     
-    # ثبت اطلاعات برای دستاوردها
     record_couple_for_achievements(chat_id, user1["id"], user2["id"], is_auto=False)
     record_couple_for_achievements(chat_id, user2["id"], user1["id"], is_auto=False)
     
@@ -1116,11 +1139,11 @@ def couple_command(update: Update, context: CallbackContext):
     
     update.message.reply_text(msg, parse_mode="Markdown")
     
-    # چک و آنلاک دستاوردها
-    check_and_unlock_achievements(chat_id, user1["id"], user1["name"], user2["id"], context.bot, is_auto=False)
-    check_and_unlock_achievements(chat_id, user2["id"], user2["name"], user1["id"], context.bot, is_auto=False)
+    safe_check_achievements(chat_id, user1["id"], user1["name"], context.bot, user2["id"], is_auto=False)
+    safe_check_achievements(chat_id, user2["id"], user2["name"], context.bot, user1["id"], is_auto=False)
     
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
+
 # ==================== برترین‌های هفته ====================
 def weekly_top_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -1187,7 +1210,6 @@ def schedule_weekly_announcement(dispatcher):
     if not job_queue:
         return
 
-    # حذف Job قبلی هفتگی اگر وجود دارد
     for job in job_queue.get_jobs_by_name("weekly_announcement"):
         job.schedule_removal()
 
@@ -1195,7 +1217,7 @@ def schedule_weekly_announcement(dispatcher):
     job_queue.run_daily(
         weekly_announcement_job,
         time=time(hour=12, minute=0),
-        days=(6,),  # یکشنبه
+        days=(6,),
         context=dispatcher,
         name="weekly_announcement"
     )
@@ -1226,7 +1248,6 @@ def addgroup_command(update: Update, context: CallbackContext):
     if add_group(chat_id):
         update.message.reply_text(f"✅ این گروه به لیست گروه‌های فعال اضافه شد.")
         
-        # ===== زمان‌بندی Job برای گروه جدید =====
         schedule_job_for_group(context.dispatcher, chat_id)
         
         members = update_members_sync(chat_id)
@@ -1242,7 +1263,6 @@ def addgroup_command(update: Update, context: CallbackContext):
             )
     else:
         update.message.reply_text(f"ℹ️ این گروه قبلاً به لیست اضافه شده است.")
-        # حتی اگر قبلاً اضافه شده، مطمئن شو Job دارد
         schedule_job_for_group(context.dispatcher, chat_id)
 
 def update_command(update: Update, context: CallbackContext):
@@ -1299,14 +1319,11 @@ def last_command(update: Update, context: CallbackContext):
 def count_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     members = get_members(chat_id)
-    blocked = get_blocked_users(chat_id)
     
     update.message.reply_text(
         f"""👥 آمار اعضا:
 
-🔹 کل اعضا: {len(members)} نفر
-🔹 اعضای قابل انتخاب: {len(members) - len(blocked)} نفر
-🔹 در لیست سیاه: {len(blocked)} نفر (۷ روزه)"""
+🔹 کل اعضا: {len(members)} نفر"""
     )
 
 def history_command(update: Update, context: CallbackContext):
@@ -1452,7 +1469,6 @@ def owner_users_command(update: Update, context: CallbackContext):
     update.message.reply_text(msg)
 
 def jobs_command(update: Update, context: CallbackContext):
-    """نمایش Jobهای فعال (فقط مالک)"""
     user_id = update.effective_user.id
     
     if user_id != OWNER_ID:
@@ -1479,6 +1495,24 @@ def jobs_command(update: Update, context: CallbackContext):
         msg += f"• `{name}`\n  بعدی: `{next_run}`\n\n"
     
     update.message.reply_text(msg, parse_mode="Markdown")
+
+def force_schedule_command(update: Update, context: CallbackContext):
+    if update.effective_user.id != OWNER_ID:
+        update.message.reply_text("⛔ فقط مالک.")
+        return
+    
+    groups = get_groups()
+    if not groups:
+        update.message.reply_text("📭 هیچ گروهی در دیتابیس نیست. اول /addgroup بزن.")
+        return
+    
+    count = 0
+    for chat_id in groups:
+        if schedule_job_for_group(context.dispatcher, chat_id):
+            count += 1
+    
+    update.message.reply_text(f"✅ برای {count} گروه Job چهارساعته تنظیم شد.\nحالا /jobs را بزن.")
+
 # ==================== AI Message Handler ====================
 def ai_response(text):
     text_lower = text.lower()
@@ -1523,7 +1557,6 @@ def daily_job(context: CallbackContext):
     bot = context.bot
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
-    
     members = update_members_sync(chat_id)
     if not members or len(members) < 2:
         try:
@@ -1532,17 +1565,12 @@ def daily_job(context: CallbackContext):
             pass
         return
     
-    # انتخاب تصادفی (بدون بلک‌لیست)
     user1, user2 = random.sample(members, 2)
-    
-    # ذخیره زوج
     save_couple(chat_id, user1, user2)
     
-    # امتیاز هفتگی
     update_weekly_score(chat_id, user1["id"])
     update_weekly_score(chat_id, user2["id"])
     
-    # ثبت اطلاعات برای دستاوردها (خودکار)
     record_couple_for_achievements(chat_id, user1["id"], user2["id"], is_auto=True)
     record_couple_for_achievements(chat_id, user2["id"], user1["id"], is_auto=True)
     
@@ -1567,11 +1595,11 @@ def daily_job(context: CallbackContext):
     except Exception as e:
         logger.error(f"❌ خطا در ارسال پیام زوج روزانه: {e}")
     
-    # چک و آنلاک دستاوردها
-    check_and_unlock_achievements(chat_id, user1["id"], user1["name"], user2["id"], bot, is_auto=True)
-    check_and_unlock_achievements(chat_id, user2["id"], user2["name"], user1["id"], bot, is_auto=True)
+    safe_check_achievements(chat_id, user1["id"], user1["name"], bot, user2["id"], is_auto=True)
+    safe_check_achievements(chat_id, user2["id"], user2["name"], bot, user1["id"], is_auto=True)
     
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
+
 def schedule_job_for_group(dispatcher, chat_id):
     """زمان‌بندی Job چهارساعته برای یک گروه خاص"""
     job_queue = dispatcher.job_queue
@@ -1579,7 +1607,6 @@ def schedule_job_for_group(dispatcher, chat_id):
         logger.error(f"❌ JobQueue در دسترس نیست. نمی‌توانم برای گروه {chat_id} زمان‌بندی کنم.")
         return False
 
-    # حذف Jobهای قبلی همین گروه
     current_jobs = job_queue.get_jobs_by_name(f"daily_couple_{chat_id}")
     for job in current_jobs:
         job.schedule_removal()
@@ -1587,7 +1614,7 @@ def schedule_job_for_group(dispatcher, chat_id):
 
     job_queue.run_repeating(
         daily_job,
-        interval=14400,          # ۴ ساعت
+        interval=14400,
         first=45,
         context=chat_id,
         name=f"daily_couple_{chat_id}"
@@ -1610,29 +1637,6 @@ def schedule_daily_jobs(dispatcher):
 
     for chat_id in groups:
         schedule_job_for_group(dispatcher, chat_id)
-
-def achievements_command(update: Update, context: CallbackContext):
-    chat_id = update.effective_chat.id
-    user = update.effective_user
-    user_id = user.id
-    user_name = user.first_name or "کاربر"
-    
-    unlocked = get_user_achievements(chat_id, user_id)
-    all_achievements = get_all_achievements_info()
-    
-    msg = f"🏆 **دستاوردهای {user_name}**\n\n"
-    
-    if not unlocked:
-        msg += "📭 هنوز هیچ دستاوردی نگرفتی!\nبا لاور شدن می‌تونی مدال جمع کنی."
-    else:
-        for ach_id in unlocked:
-            ach = all_achievements.get(ach_id, {})
-            msg += f"{ach.get('emoji', '🏅')} **{ach.get('name', ach_id)}**\n"
-            msg += f"   └ {ach.get('description', '')}\n\n"
-    
-    msg += f"\n📊 تعداد دستاورد: {len(unlocked)} از {len(all_achievements)}"
-    
-    update.message.reply_text(msg, parse_mode="Markdown")
 
 # ==================== اجرا ====================
 def main():
@@ -1660,6 +1664,7 @@ def main():
     # ===== دستورات =====
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
+    dp.add_handler(CommandHandler("achievements", achievements_command))
     dp.add_handler(CommandHandler("fall", fall_command))
     dp.add_handler(CommandHandler("event", event_command))
     dp.add_handler(CommandHandler("ask", ask_command))
@@ -1675,7 +1680,6 @@ def main():
     dp.add_handler(CommandHandler("stats", stats_command))
     dp.add_handler(CommandHandler("mystats", mystats_command))
     dp.add_handler(CommandHandler("weekly_top", weekly_top_command))
-    dp.add_handler(CommandHandler("achievements", achievements_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
     # ===== دستورات بلاک =====
@@ -1687,6 +1691,7 @@ def main():
     dp.add_handler(CommandHandler("owner_stats", owner_stats_command))
     dp.add_handler(CommandHandler("owner_users", owner_users_command))
     dp.add_handler(CommandHandler("jobs", jobs_command))
+    dp.add_handler(CommandHandler("force_schedule", force_schedule_command))
     
     # ===== CallbackQueryHandler =====
     dp.add_handler(CallbackQueryHandler(button_callback))
