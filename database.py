@@ -391,81 +391,59 @@ def get_user_total_couples(chat_id, user_id):
 # ==================== سیستم دستاورد ====================
 
 ACHIEVEMENTS = {
-    "first_love": {
-        "name": "تازه‌وارد",
-        "emoji": "🌱",
-        "description": "اولین بار لاور شدی"
-    },
-    "beginner": {
-        "name": "عاشق مبتدی",
-        "emoji": "💘",
-        "description": "۵ بار لاور شدی"
-    },
-    "pro": {
-        "name": "لاور حرفه‌ای",
-        "emoji": "🔥",
-        "description": "۱۵ بار لاور شدی"
-    },
-    "legend": {
-        "name": "افسانه عشق",
-        "emoji": "🏆",
-        "description": "۵۰ بار لاور شدی"
-    },
-    "king": {
-        "name": "پادشاه/ملکه عشق",
-        "emoji": "👑",
-        "description": "۱۰۰ بار لاور شدی"
-    },
-    "loyal": {
-        "name": "وفادار",
-        "emoji": "💍",
-        "description": "۳ بار با یک نفر خاص لاور شدی"
-    },
-    "super_loyal": {
-        "name": "خیلی وفادار",
-        "emoji": "💖",
-        "description": "۷ بار با یک نفر خاص لاور شدی"
-    },
-    "diverse": {
-        "name": "تنوع‌طلب",
-        "emoji": "🌈",
-        "description": "با ۱۰ نفر مختلف لاور شدی"
-    },
-    "super_diverse": {
-        "name": "پادشاه تنوع",
-        "emoji": "🌟",
-        "description": "با ۲۵ نفر مختلف لاور شدی"
-    },
-    "weekly_winner": {
-        "name": "زوج طلایی",
-        "emoji": "🥇",
-        "description": "برنده لاورهای هفته شدی"
-    },
-    "monthly_hero": {
-        "name": "قهرمان ماه",
-        "emoji": "🏅",
-        "description": "۳ بار برنده هفته شدی"
-    },
-    "consistent": {
-        "name": "ستاره گروه",
-        "emoji": "⭐",
-        "description": "۱۰ بار جزو ۱۰ نفر برتر هفته بودی"
-    },
-    "pioneer": {
-        "name": "اولین جرقه",
-        "emoji": "✨",
-        "description": "اولین لاور گروه بودی"
-    },
-    "night_owl": {
-        "name": "شب‌زنده‌دار",
-        "emoji": "🌙",
-        "description": "بین ۱۲ تا ۵ صبح لاور شدی"
-    },
-    "lucky": {
-        "name": "خوش‌شانس",
-        "emoji": "🍀",
-        "description": "۳ بار پشت‌سرهم لاور شدی"
-    }
+    # --- سری اول (۱ تا ۱۵) ---
+    "first_love": {"name": "تازه‌وارد", "emoji": "🌱", "description": "اولین بار لاور شدی"},
+    "beginner": {"name": "عاشق مبتدی", "emoji": "💘", "description": "۵ بار لاور شدی"},
+    "pro": {"name": "لاور حرفه‌ای", "emoji": "🔥", "description": "۱۵ بار لاور شدی"},
+    "legend": {"name": "افسانه عشق", "emoji": "🏆", "description": "۵۰ بار لاور شدی"},
+    "king": {"name": "پادشاه/ملکه عشق", "emoji": "👑", "description": "۱۰۰ بار لاور شدی"},
+    "loyal": {"name": "وفادار", "emoji": "💍", "description": "۳ بار با یک نفر خاص لاور شدی"},
+    "super_loyal": {"name": "خیلی وفادار", "emoji": "💖", "description": "۷ بار با یک نفر خاص لاور شدی"},
+    "diverse": {"name": "تنوع‌طلب", "emoji": "🌈", "description": "با ۱۰ نفر مختلف لاور شدی"},
+    "super_diverse": {"name": "پادشاه تنوع", "emoji": "🌟", "description": "با ۲۵ نفر مختلف لاور شدی"},
+    "weekly_winner": {"name": "زوج طلایی", "emoji": "🥇", "description": "برنده لاورهای هفته شدی"},
+    "monthly_hero": {"name": "قهرمان ماه", "emoji": "🏅", "description": "۳ بار برنده هفته شدی"},
+    "consistent": {"name": "ستاره گروه", "emoji": "⭐", "description": "۱۰ بار جزو ۱۰ نفر برتر هفته بودی"},
+    "pioneer": {"name": "اولین جرقه", "emoji": "✨", "description": "اولین لاور گروه بودی"},
+    "night_owl": {"name": "شب‌زنده‌دار", "emoji": "🌙", "description": "بین ۱۲ تا ۵ صبح لاور شدی"},
+    "lucky": {"name": "خوش‌شانس", "emoji": "🍀", "description": "۳ بار پشت‌سرهم لاور شدی"},
+
+    # --- سری دوم و سوم (۱۶ تا ۵۰) ---
+    "early_bird": {"name": "سحرخیز", "emoji": "🌅", "description": "بین ۵ تا ۸ صبح لاور شدی"},
+    "weekend_lover": {"name": "عاشق آخر هفته", "emoji": "🎉", "description": "در جمعه یا شنبه لاور شدی"},
+    "comeback": {"name": "بازگشت قهرمان", "emoji": "🔄", "description": "بعد از ۱۴ روز غیبت دوباره لاور شدی"},
+    "popular": {"name": "محبوب گروه", "emoji": "😍", "description": "با ۱۵ نفر مختلف لاور شدی"},
+    "legend_plus": {"name": "افسانه زنده", "emoji": "🏛️", "description": "۲۰۰ بار لاور شدی"},
+    "perfect_match": {"name": "مچ کامل", "emoji": "🎯", "description": "با کسی که علاقه‌اش یکی بود لاور شدی"},
+    "opposite_attract": {"name": "تضاد جذاب", "emoji": "💑", "description": "با جنسیت مخالف لاور شدی"},
+    "serial_lover": {"name": "لاور سریالی", "emoji": "⚡", "description": "۵ بار در یک روز لاور شدی"},
+    "ghost": {"name": "روح", "emoji": "👻", "description": "۱۰ بار فقط از طریق انتخاب خودکار لاور شدی"},
+    "announcer": {"name": "اعلام‌کننده", "emoji": "📢", "description": "اولین نفری بودی که /couple زدی"},
+    "collector": {"name": "جمع‌کننده مدال", "emoji": "🏅", "description": "۱۰ دستاورد گرفتی"},
+    "master_collector": {"name": "استاد مدال‌ها", "emoji": "🥇", "description": "۲۰ دستاورد گرفتی"},
+    "unstoppable": {"name": "توقف‌ناپذیر", "emoji": "🔥", "description": "۷ روز پشت‌سرهم لاور شدی"},
+    "social_butterfly": {"name": "پروانه اجتماعی", "emoji": "🦋", "description": "با ۳۰ نفر مختلف لاور شدی"},
+    "immortal": {"name": "جاودانه", "emoji": "♾️", "description": "۵۰۰ بار لاور شدی"},
+    "first_blood": {"name": "اولین خون", "emoji": "🩸", "description": "اولین لاور روز بودی"},
+    "last_dance": {"name": "آخرین رقص", "emoji": "🕺", "description": "آخرین لاور روز بودی"},
+    "twin_flame": {"name": "شعله دوقلو", "emoji": "🔥🔥", "description": "۲ بار پشت‌سرهم با یک نفر لاور شدی"},
+    "forbidden": {"name": "عشق ممنوعه", "emoji": "😈", "description": "با کسی که بیشتر از ۵ بار باهاش لاور شدی دوباره لاور شدی"},
+    "underdog": {"name": "اسب سیاه", "emoji": "🐴", "description": "با کمتر از ۳ لاور برنده هفته شدی"},
+    "veteran": {"name": "کهنه‌کار", "emoji": "🎖️", "description": "۳۰ روز عضویت + حداقل ۱۰ لاور"},
+    "silent_lover": {"name": "عاشق ساکت", "emoji": "🤫", "description": "۱۰ بار بدون زدن دستور لاور شدی"},
+    "command_king": {"name": "پادشاه دستورات", "emoji": "👑", "description": "۵۰ بار دستور /couple زدی"},
+    "fortune_teller": {"name": "فال‌بین", "emoji": "🔮", "description": "۲۰ بار فال گرفتی"},
+    "curious": {"name": "کنجکاو", "emoji": "🧠", "description": "۳۰ بار از هوش مصنوعی سوال پرسیدی"},
+    "profile_master": {"name": "استاد پروفایل", "emoji": "📝", "description": "هم جنسیت و هم علاقه را تنظیم کردی"},
+    "night_king": {"name": "پادشاه شب", "emoji": "👑🌙", "description": "۱۰ بار بین ۱۲ تا ۵ صبح لاور شدی"},
+    "morning_person": {"name": "آدم صبح", "emoji": "☀️", "description": "۱۰ بار بین ۵ تا ۹ صبح لاور شدی"},
+    "streak_3": {"name": "رگبار ۳ تایی", "emoji": "🔥", "description": "۳ روز پشت‌سرهم لاور شدی"},
+    "streak_7": {"name": "رگبار هفتگی", "emoji": "💥", "description": "۷ روز پشت‌سرهم لاور شدی"},
+    "streak_15": {"name": "رگبار افسانه‌ای", "emoji": "🚀", "description": "۱۵ روز پشت‌سرهم لاور شدی"},
+    "matchmaker": {"name": "واسطه‌گر", "emoji": "💘", "description": "با دستور تو دیگران لاور شدند"},
+    "unlucky": {"name": "بدشانس", "emoji": "😢", "description": "۲۰ بار لاور شدی ولی برنده هفته نشدی"},
+    "comeback_king": {"name": "پادشاه بازگشت", "emoji": "👑🔄", "description": "بعد از ۳۰ روز غیبت برنده هفته شدی"},
+    "god_of_love": {"name": "خدای عشق", "emoji": "🕊️", "description": "۱۰۰۰ بار لاور شدی"},
 }
 
 def get_user_achievements(chat_id, user_id):
@@ -498,6 +476,135 @@ def unlock_achievement(chat_id, user_id, achievement_id):
 
 def get_all_achievements_info():
     return ACHIEVEMENTS
+
+# ==================== آمار پیشرفته برای دستاوردها ====================
+
+def get_user_extra_stats(chat_id, user_id):
+    """دریافت آمار اضافی کاربر برای دستاوردها"""
+    data = load_data()
+    chat_id_str = str(chat_id)
+    user_id_str = str(user_id)
+    
+    default = {
+        "last_couple_date": None,          # آخرین تاریخ لاور شدن
+        "current_streak": 0,               # رگبار فعلی
+        "max_streak": 0,                   # بیشترین رگبار
+        "daily_count": {},                 # تعداد لاور در هر روز (کلید: YYYY-MM-DD)
+        "auto_count": 0,                   # تعداد لاور از طریق Job خودکار
+        "manual_count": 0,                 # تعداد لاور از طریق دستور
+        "couple_commands": 0,              # تعداد دفعات زدن /couple
+        "fall_commands": 0,                # تعداد دفعات زدن /fall
+        "ask_commands": 0,                 # تعداد دفعات زدن /ask
+        "weekly_wins": 0,                  # تعداد برد هفته
+        "top10_count": 0,                  # تعداد دفعات حضور در ۱۰ نفر برتر
+        "first_activity": None,            # اولین فعالیت در گروه
+        "night_count": 0,                  # تعداد لاور شبانه (۰-۵)
+        "morning_count": 0,                # تعداد لاور صبح (۵-۹)
+        "last_partners": [],               # آخرین چند شریک (برای twin_flame و ...)
+    }
+    
+    stats = data.get("user_extra_stats", {}).get(chat_id_str, {}).get(user_id_str, {})
+    
+    # پر کردن مقادیر پیش‌فرض اگر وجود نداشت
+    for key, value in default.items():
+        if key not in stats:
+            stats[key] = value
+            
+    return stats
+
+def update_user_extra_stats(chat_id, user_id, **kwargs):
+    """به‌روزرسانی آمار اضافی کاربر"""
+    data = load_data()
+    chat_id_str = str(chat_id)
+    user_id_str = str(user_id)
+    
+    if "user_extra_stats" not in data:
+        data["user_extra_stats"] = {}
+    if chat_id_str not in data["user_extra_stats"]:
+        data["user_extra_stats"][chat_id_str] = {}
+    if user_id_str not in data["user_extra_stats"][chat_id_str]:
+        data["user_extra_stats"][chat_id_str][user_id_str] = get_user_extra_stats(chat_id, user_id)
+    
+    stats = data["user_extra_stats"][chat_id_str][user_id_str]
+    stats.update(kwargs)
+    data["user_extra_stats"][chat_id_str][user_id_str] = stats
+    save_data(data)
+
+def increment_command_count(chat_id, user_id, command_type):
+    """افزایش شمارنده دستورات (couple / fall / ask)"""
+    stats = get_user_extra_stats(chat_id, user_id)
+    
+    if command_type == "couple":
+        stats["couple_commands"] = stats.get("couple_commands", 0) + 1
+    elif command_type == "fall":
+        stats["fall_commands"] = stats.get("fall_commands", 0) + 1
+    elif command_type == "ask":
+        stats["ask_commands"] = stats.get("ask_commands", 0) + 1
+        
+    update_user_extra_stats(chat_id, user_id, **stats)
+
+def record_couple_for_achievements(chat_id, user_id, partner_id, is_auto=False):
+    """ثبت اطلاعات لاور شدن برای محاسبه دستاوردها"""
+    from datetime import datetime, timedelta
+    
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+    stats = get_user_extra_stats(chat_id, user_id)
+    
+    # تاریخ اولین فعالیت
+    if not stats.get("first_activity"):
+        stats["first_activity"] = now.isoformat()
+    
+    # شمارش روزانه
+    daily = stats.get("daily_count", {})
+    daily[today_str] = daily.get(today_str, 0) + 1
+    stats["daily_count"] = daily
+    
+    # خودکار یا دستی
+    if is_auto:
+        stats["auto_count"] = stats.get("auto_count", 0) + 1
+    else:
+        stats["manual_count"] = stats.get("manual_count", 0) + 1
+    
+    # شب یا صبح
+    hour = now.hour
+    if 0 <= hour < 5:
+        stats["night_count"] = stats.get("night_count", 0) + 1
+    elif 5 <= hour < 9:
+        stats["morning_count"] = stats.get("morning_count", 0) + 1
+    
+    # رگبار (Streak)
+    last_date_str = stats.get("last_couple_date")
+    if last_date_str:
+        try:
+            last_date = datetime.fromisoformat(last_date_str).date()
+            today = now.date()
+            diff = (today - last_date).days
+            
+            if diff == 1:
+                stats["current_streak"] = stats.get("current_streak", 0) + 1
+            elif diff == 0:
+                pass  # همان روز
+            else:
+                stats["current_streak"] = 1
+        except:
+            stats["current_streak"] = 1
+    else:
+        stats["current_streak"] = 1
+    
+    # به‌روزرسانی max streak
+    if stats["current_streak"] > stats.get("max_streak", 0):
+        stats["max_streak"] = stats["current_streak"]
+    
+    # آخرین تاریخ
+    stats["last_couple_date"] = now.isoformat()
+    
+    # آخرین شرکا (برای twin_flame و forbidden)
+    last_partners = stats.get("last_partners", [])
+    last_partners.insert(0, partner_id)
+    stats["last_partners"] = last_partners[:10]  # فقط ۱۰ تای آخر
+    
+    update_user_extra_stats(chat_id, user_id, **stats)
 
 def clear_data():
     save_data({"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "weekly_scores": {}, "global_blocked": []})
