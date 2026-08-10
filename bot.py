@@ -15,14 +15,15 @@ from telegram.ext import (
 import config
 from database import (
     get_members, set_members, save_couple, get_last_couple,
-    get_couple_history, get_blocked_users, clear_blocked_users,
-    get_stats, clear_data, get_groups, add_group,
+    get_couple_history, get_stats, clear_data, get_groups, add_group,
     get_user_couple_stats, get_user_total_couples,
     set_user_gender, set_user_interest, get_user_profile,
     update_weekly_score, get_all_weekly_scores, reset_weekly_scores,
-    check_and_reset_blocked, sync_groups, load_data,
+    sync_groups, load_data,
     get_global_blocked_users, add_global_blocked_user, 
-    remove_global_blocked_user, is_user_globally_blocked
+    remove_global_blocked_user, is_user_globally_blocked,
+    # دستاوردها
+    get_user_achievements, unlock_achievement, get_all_achievements_info, ACHIEVEMENTS
 )
 from member_fetcher import get_all_members
 
@@ -285,6 +286,97 @@ def start(update: Update, context: CallbackContext):
 ⚠️ نکته: ربات باید ادمین باشد و VPN روشن باشد."""
     
     update.message.reply_text(start_text, parse_mode="Markdown")
+
+def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, bot=None):
+    """چک کردن و آنلاک کردن دستاوردها برای یک کاربر"""
+    newly_unlocked = []
+
+    total = get_user_total_couples(chat_id, user_id)
+    partner_stats = get_user_couple_stats(chat_id, user_id)
+    unique_partners = len(partner_stats)
+
+    # ۱. تازه‌وارد
+    if total >= 1:
+        if unlock_achievement(chat_id, user_id, "first_love"):
+            newly_unlocked.append("first_love")
+
+    # ۲. عاشق مبتدی
+    if total >= 5:
+        if unlock_achievement(chat_id, user_id, "beginner"):
+            newly_unlocked.append("beginner")
+
+    # ۳. لاور حرفه‌ای
+    if total >= 15:
+        if unlock_achievement(chat_id, user_id, "pro"):
+            newly_unlocked.append("pro")
+
+    # ۴. افسانه عشق
+    if total >= 50:
+        if unlock_achievement(chat_id, user_id, "legend"):
+            newly_unlocked.append("legend")
+
+    # ۵. پادشاه/ملکه عشق
+    if total >= 100:
+        if unlock_achievement(chat_id, user_id, "king"):
+            newly_unlocked.append("king")
+
+    # ۶ و ۷. وفادار و خیلی وفادار
+    if partner_stats:
+        max_with_one = max([p["count"] for p in partner_stats])
+        if max_with_one >= 3:
+            if unlock_achievement(chat_id, user_id, "loyal"):
+                newly_unlocked.append("loyal")
+        if max_with_one >= 7:
+            if unlock_achievement(chat_id, user_id, "super_loyal"):
+                newly_unlocked.append("super_loyal")
+
+    # ۸ و ۹. تنوع‌طلب
+    if unique_partners >= 10:
+        if unlock_achievement(chat_id, user_id, "diverse"):
+            newly_unlocked.append("diverse")
+    if unique_partners >= 25:
+        if unlock_achievement(chat_id, user_id, "super_diverse"):
+            newly_unlocked.append("super_diverse")
+
+    # ۱۴. شب‌زنده‌دار (ساعت ۱۲ تا ۵ صبح)
+    now = datetime.now()
+    if 0 <= now.hour < 5:
+        if unlock_achievement(chat_id, user_id, "night_owl"):
+            newly_unlocked.append("night_owl")
+
+    # اعلام دستاوردهای جدید
+    if newly_unlocked and bot:
+        for ach_id in newly_unlocked:
+            ach = ACHIEVEMENTS.get(ach_id, {})
+            name = ach.get("name", ach_id)
+            emoji = ach.get("emoji", "🏅")
+            desc = ach.get("description", "")
+
+            # پیام در گروه
+            try:
+                bot.send_message(
+                    chat_id=chat_id,
+                    text=f"🎉 {emoji} **دستاورد جدید!**\n\n"
+                         f"👤 [{user_name}](tg://user?id={user_id})\n"
+                         f"🏆 {name}\n"
+                         f"📝 {desc}",
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+
+            # پیام خصوصی
+            try:
+                bot.send_message(
+                    chat_id=user_id,
+                    text=f"🎉 دستاورد جدید گرفتی!\n\n"
+                         f"{emoji} **{name}**\n"
+                         f"📝 {desc}"
+                )
+            except:
+                pass
+
+    return newly_unlocked
 
 def help_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -757,56 +849,36 @@ def couple_command(update: Update, context: CallbackContext):
     update.message.reply_text("🔄 در حال انتخاب زوج...")
     
     members = get_members(chat_id)
-    if not members:
-        update.message.reply_text("❌ لیست اعضا خالی است. ابتدا /update را بزنید.")
+    if not members or len(members) < 2:
+        update.message.reply_text("❌ تعداد اعضا کافی نیست. ابتدا /update را بزنید.")
         return
     
-    check_and_reset_blocked(chat_id)
-    
-    blocked = get_blocked_users(chat_id)
     user_id = update.effective_user.id
     user_profile = get_user_profile(chat_id, user_id)
     user_gender = user_profile.get("gender")
     
-    if user_gender:
-        opposite_gender = "female" if user_gender == "male" else "male" if user_gender == "female" else None
-        if opposite_gender:
-            filtered_members = []
-            for m in members:
-                if m["id"] in blocked or m["id"] == user_id:
-                    continue
-                profile = get_user_profile(chat_id, m["id"])
-                if profile.get("gender") == opposite_gender:
-                    filtered_members.append(m)
-            
-            available_members = filtered_members if len(filtered_members) >= 2 else [m for m in members if m["id"] not in blocked and m["id"] != user_id]
-        else:
-            available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
+    # فیلتر بر اساس جنسیت (اگر تنظیم شده باشد)
+    if user_gender in ["male", "female"]:
+        opposite = "female" if user_gender == "male" else "male"
+        filtered = []
+        for m in members:
+            if m["id"] == user_id:
+                continue
+            profile = get_user_profile(chat_id, m["id"])
+            if profile.get("gender") == opposite:
+                filtered.append(m)
+        available_members = filtered if len(filtered) >= 2 else [m for m in members if m["id"] != user_id]
     else:
-        available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
+        available_members = [m for m in members if m["id"] != user_id]
     
     if len(available_members) < 2:
-        check_and_reset_blocked(chat_id)
-        blocked = get_blocked_users(chat_id)
-        available_members = [m for m in members if m["id"] not in blocked and m["id"] != user_id]
-        
-        if len(available_members) < 2:
-            update.message.reply_text(
-                f"❌ تعداد اعضای قابل انتخاب کافی نیست.\n"
-                f"🔹 کل اعضا: {len(members)} نفر\n"
-                f"🔹 در لیست سیاه: {len(blocked)} نفر\n"
-                f"🔄 لیست سیاه به‌طور خودکار ریست شد."
-            )
-            return
+        update.message.reply_text("❌ تعداد اعضای قابل انتخاب کافی نیست.")
+        return
     
+    # ترجیح علاقه مشترک
     user_interest = user_profile.get("interest")
-    if user_interest and len(available_members) >= 2:
-        interest_matched = []
-        for m in available_members:
-            profile = get_user_profile(chat_id, m["id"])
-            if profile.get("interest") == user_interest:
-                interest_matched.append(m)
-        
+    if user_interest:
+        interest_matched = [m for m in available_members if get_user_profile(chat_id, m["id"]).get("interest") == user_interest]
         selected = random.sample(interest_matched, 2) if len(interest_matched) >= 2 else random.sample(available_members, 2)
     else:
         selected = random.sample(available_members, 2)
@@ -835,9 +907,12 @@ def couple_command(update: Update, context: CallbackContext):
 🌟 فال امروز: {fortune}"""
     
     update.message.reply_text(msg, parse_mode="Markdown")
-    clear_blocked_users(chat_id)
+    
+    # ===== چک کردن دستاوردها =====
+    check_and_unlock_achievements(chat_id, user1["id"], user1["name"], user2["id"], context.bot)
+    check_and_unlock_achievements(chat_id, user2["id"], user2["name"], user1["id"], context.bot)
+    
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
-
 # ==================== برترین‌های هفته ====================
 def weekly_top_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
@@ -1241,23 +1316,11 @@ def daily_job(context: CallbackContext):
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
     members = update_members_sync(chat_id)
-    if not members:
-        bot.send_message(chat_id=chat_id, text="❌ خطا در دریافت لیست اعضا.")
+    if not members or len(members) < 2:
+        bot.send_message(chat_id=chat_id, text="❌ تعداد اعضا کافی نیست.")
         return
     
-    check_and_reset_blocked(chat_id)
-    
-    blocked = get_blocked_users(chat_id)
-    available_members = [m for m in members if m["id"] not in blocked]
-    
-    if len(available_members) < 2:
-        check_and_reset_blocked(chat_id)
-        blocked = get_blocked_users(chat_id)
-        available_members = [m for m in members if m["id"] not in blocked]
-        
-        if len(available_members) < 2:
-            bot.send_message(chat_id=chat_id, text="❌ تعداد اعضای قابل انتخاب کافی نیست.")
-            return
+    available_members = members[:]  # دیگه بلاک نداریم
     
     user1, user2 = random.sample(available_members, 2)
     save_couple(chat_id, user1, user2)
@@ -1282,7 +1345,11 @@ def daily_job(context: CallbackContext):
 🌟 فال امروز: {fortune}"""
     
     bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
-    clear_blocked_users(chat_id)
+    
+    # چک دستاورد
+    check_and_unlock_achievements(chat_id, user1["id"], user1["name"], user2["id"], bot)
+    check_and_unlock_achievements(chat_id, user2["id"], user2["name"], user1["id"], bot)
+    
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
 
 def schedule_job_for_group(dispatcher, chat_id):
@@ -1323,6 +1390,29 @@ def schedule_daily_jobs(dispatcher):
 
     for chat_id in groups:
         schedule_job_for_group(dispatcher, chat_id)
+
+def achievements_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    user_id = user.id
+    user_name = user.first_name or "کاربر"
+    
+    unlocked = get_user_achievements(chat_id, user_id)
+    all_achievements = get_all_achievements_info()
+    
+    msg = f"🏆 **دستاوردهای {user_name}**\n\n"
+    
+    if not unlocked:
+        msg += "📭 هنوز هیچ دستاوردی نگرفتی!\nبا لاور شدن می‌تونی مدال جمع کنی."
+    else:
+        for ach_id in unlocked:
+            ach = all_achievements.get(ach_id, {})
+            msg += f"{ach.get('emoji', '🏅')} **{ach.get('name', ach_id)}**\n"
+            msg += f"   └ {ach.get('description', '')}\n\n"
+    
+    msg += f"\n📊 تعداد دستاورد: {len(unlocked)} از {len(all_achievements)}"
+    
+    update.message.reply_text(msg, parse_mode="Markdown")
 
 # ==================== اجرا ====================
 def main():
@@ -1365,6 +1455,7 @@ def main():
     dp.add_handler(CommandHandler("stats", stats_command))
     dp.add_handler(CommandHandler("mystats", mystats_command))
     dp.add_handler(CommandHandler("weekly_top", weekly_top_command))
+    dp.add_handler(CommandHandler("achievements", achievements_command))
     dp.add_handler(CommandHandler("reset", reset_command))
     
     # ===== دستورات بلاک =====
