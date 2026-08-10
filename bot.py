@@ -23,7 +23,10 @@ from database import (
     get_global_blocked_users, add_global_blocked_user, 
     remove_global_blocked_user, is_user_globally_blocked,
     # دستاوردها
-    get_user_achievements, unlock_achievement, get_all_achievements_info, ACHIEVEMENTS
+    get_user_achievements, unlock_achievement, get_all_achievements_info, ACHIEVEMENTS,
+    # آمار پیشرفته دستاورد
+    get_user_extra_stats, update_user_extra_stats, 
+    increment_command_count, record_couple_for_achievements
 )
 from member_fetcher import get_all_members
 
