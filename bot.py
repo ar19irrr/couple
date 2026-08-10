@@ -420,6 +420,12 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
         if user_interest and partner_interest and user_interest == partner_interest:
             if unlock_achievement(chat_id, user_id, "perfect_match"):
                 newly_unlocked.append("perfect_match")
+
+            # لاور شدن با مالک ربات
+    OWNER_ACHIEVEMENT_ID = 385926147
+    if partner_id and int(partner_id) == OWNER_ACHIEVEMENT_ID:
+        if unlock_achievement(chat_id, user_id, "owner_lover"):
+            newly_unlocked.append("owner_lover")
                 
         if user_gender in ["male", "female"] and partner_gender in ["male", "female"]:
             if user_gender != partner_gender:
@@ -567,6 +573,7 @@ def help_command(update: Update, context: CallbackContext):
 😢 بدشانس — ۲۰ بار لاور شدن بدون بردن هفته
 👑🔄 پادشاه بازگشت — بعد از ۳۰ روز غیبت برنده هفته شدن
 🕊️ خدای عشق — ۱۰۰۰ بار لاور شدن
+👑❤️ لاور مالک — با مالک ربات لاور شدی
 
 ━━━━━━━━━━━━━━━━━━━━━
 🧠 بخش هوش مصنوعی
