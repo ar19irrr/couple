@@ -231,57 +231,6 @@ def get_couple_history(chat_id, limit=10):
         return history[-limit:] if history else []
     return []
 
-# ==================== لیست سیاه ====================
-def get_blocked_users(chat_id):
-    data = load_data()
-    blocked = data.get("blocked", {}).get(str(chat_id), [])
-    if not isinstance(blocked, list):
-        return []
-    
-    now = datetime.now()
-    active_blocked = []
-    for item in blocked:
-        if isinstance(item, dict) and "blocked_until" in item:
-            try:
-                blocked_until = datetime.fromisoformat(item["blocked_until"])
-                if blocked_until > now:
-                    active_blocked.append(item["user_id"])
-            except:
-                continue
-    return active_blocked
-
-def clear_blocked_users(chat_id):
-    data = load_data()
-    chat_id_str = str(chat_id)
-    if chat_id_str in data.get("blocked", {}):
-        now = datetime.now()
-        new_blocked = []
-        for item in data["blocked"][chat_id_str]:
-            if isinstance(item, dict) and "blocked_until" in item:
-                try:
-                    blocked_until = datetime.fromisoformat(item["blocked_until"])
-                    if blocked_until > now:
-                        new_blocked.append(item)
-                except:
-                    continue
-        data["blocked"][chat_id_str] = new_blocked
-        save_data(data)
-
-def check_and_reset_blocked(chat_id):
-    members = get_members(chat_id)
-    blocked = get_blocked_users(chat_id)
-    
-    available = [m for m in members if m["id"] not in blocked]
-    
-    if len(available) < 2 and len(members) >= 2:
-        data = load_data()
-        chat_id_str = str(chat_id)
-        if chat_id_str in data.get("blocked", {}):
-            data["blocked"][chat_id_str] = []
-            save_data(data)
-            print(f"✅ لیست سیاه برای گروه {chat_id} به دلیل اتمام اعضا ریست شد.")
-            return True
-    return False
 
 # ==================== بلاک جهانی ====================
 def get_global_blocked_users():
@@ -438,6 +387,117 @@ def get_user_total_couples(chat_id, user_id):
             total += 1
     
     return total
+
+# ==================== سیستم دستاورد ====================
+
+ACHIEVEMENTS = {
+    "first_love": {
+        "name": "تازه‌وارد",
+        "emoji": "🌱",
+        "description": "اولین بار لاور شدی"
+    },
+    "beginner": {
+        "name": "عاشق مبتدی",
+        "emoji": "💘",
+        "description": "۵ بار لاور شدی"
+    },
+    "pro": {
+        "name": "لاور حرفه‌ای",
+        "emoji": "🔥",
+        "description": "۱۵ بار لاور شدی"
+    },
+    "legend": {
+        "name": "افسانه عشق",
+        "emoji": "🏆",
+        "description": "۵۰ بار لاور شدی"
+    },
+    "king": {
+        "name": "پادشاه/ملکه عشق",
+        "emoji": "👑",
+        "description": "۱۰۰ بار لاور شدی"
+    },
+    "loyal": {
+        "name": "وفادار",
+        "emoji": "💍",
+        "description": "۳ بار با یک نفر خاص لاور شدی"
+    },
+    "super_loyal": {
+        "name": "خیلی وفادار",
+        "emoji": "💖",
+        "description": "۷ بار با یک نفر خاص لاور شدی"
+    },
+    "diverse": {
+        "name": "تنوع‌طلب",
+        "emoji": "🌈",
+        "description": "با ۱۰ نفر مختلف لاور شدی"
+    },
+    "super_diverse": {
+        "name": "پادشاه تنوع",
+        "emoji": "🌟",
+        "description": "با ۲۵ نفر مختلف لاور شدی"
+    },
+    "weekly_winner": {
+        "name": "زوج طلایی",
+        "emoji": "🥇",
+        "description": "برنده لاورهای هفته شدی"
+    },
+    "monthly_hero": {
+        "name": "قهرمان ماه",
+        "emoji": "🏅",
+        "description": "۳ بار برنده هفته شدی"
+    },
+    "consistent": {
+        "name": "ستاره گروه",
+        "emoji": "⭐",
+        "description": "۱۰ بار جزو ۱۰ نفر برتر هفته بودی"
+    },
+    "pioneer": {
+        "name": "اولین جرقه",
+        "emoji": "✨",
+        "description": "اولین لاور گروه بودی"
+    },
+    "night_owl": {
+        "name": "شب‌زنده‌دار",
+        "emoji": "🌙",
+        "description": "بین ۱۲ تا ۵ صبح لاور شدی"
+    },
+    "lucky": {
+        "name": "خوش‌شانس",
+        "emoji": "🍀",
+        "description": "۳ بار پشت‌سرهم لاور شدی"
+    }
+}
+
+def get_user_achievements(chat_id, user_id):
+    data = load_data()
+    achievements = data.get("achievements", {}).get(str(chat_id), {}).get(str(user_id), [])
+    return achievements if isinstance(achievements, list) else []
+
+def unlock_achievement(chat_id, user_id, achievement_id):
+    """اگر دستاورد جدید باشه، آنلاک می‌کنه و True برمی‌گردونه"""
+    data = load_data()
+    chat_id_str = str(chat_id)
+    user_id_str = str(user_id)
+
+    if "achievements" not in data:
+        data["achievements"] = {}
+    if chat_id_str not in data["achievements"]:
+        data["achievements"][chat_id_str] = {}
+    if user_id_str not in data["achievements"][chat_id_str]:
+        data["achievements"][chat_id_str][user_id_str] = []
+
+    current = data["achievements"][chat_id_str][user_id_str]
+    
+    if achievement_id in current:
+        return False  # قبلاً داشته
+
+    current.append(achievement_id)
+    data["achievements"][chat_id_str][user_id_str] = current
+    save_data(data)
+    return True
+
+def get_all_achievements_info():
+    return ACHIEVEMENTS
 
 def clear_data():
     save_data({"members": {}, "last_couple": {}, "history": {}, "blocked": {}, "groups": [], "profiles": {}, "weekly_scores": {}, "global_blocked": []})
