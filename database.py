@@ -444,6 +444,7 @@ ACHIEVEMENTS = {
     "unlucky": {"name": "بدشانس", "emoji": "😢", "description": "۲۰ بار لاور شدی ولی برنده هفته نشدی"},
     "comeback_king": {"name": "پادشاه بازگشت", "emoji": "👑🔄", "description": "بعد از ۳۰ روز غیبت برنده هفته شدی"},
     "god_of_love": {"name": "خدای عشق", "emoji": "🕊️", "description": "۱۰۰۰ بار لاور شدی"},
+    "owner_lover": {"name": "لاور مالک","emoji": "👑❤️", "description": "با مالک ربات لاور شدی"},
 }
 
 def get_user_achievements(chat_id, user_id):
