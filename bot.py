@@ -287,64 +287,172 @@ def start(update: Update, context: CallbackContext):
     
     update.message.reply_text(start_text, parse_mode="Markdown")
 
-def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, bot=None):
-    """چک کردن و آنلاک کردن دستاوردها برای یک کاربر"""
+def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, bot=None, is_auto=False):
+    """چک کردن و آنلاک کردن همه ۵۰ دستاورد"""
+    from datetime import datetime, timedelta
+    
     newly_unlocked = []
-
+    
+    # آمار پایه
     total = get_user_total_couples(chat_id, user_id)
     partner_stats = get_user_couple_stats(chat_id, user_id)
     unique_partners = len(partner_stats)
+    unlocked = get_user_achievements(chat_id, user_id)
+    extra = get_user_extra_stats(chat_id, user_id)
+    
+    now = datetime.now()
+    hour = now.hour
+    weekday = now.weekday()  # 0=دوشنبه ... 4=جمعه، 5=شنبه
 
-    # ۱. تازه‌وارد
-    if total >= 1:
-        if unlock_achievement(chat_id, user_id, "first_love"):
-            newly_unlocked.append("first_love")
+    # ---------- سری ۱ ----------
+    if total >= 1 and unlock_achievement(chat_id, user_id, "first_love"):
+        newly_unlocked.append("first_love")
+    if total >= 5 and unlock_achievement(chat_id, user_id, "beginner"):
+        newly_unlocked.append("beginner")
+    if total >= 15 and unlock_achievement(chat_id, user_id, "pro"):
+        newly_unlocked.append("pro")
+    if total >= 50 and unlock_achievement(chat_id, user_id, "legend"):
+        newly_unlocked.append("legend")
+    if total >= 100 and unlock_achievement(chat_id, user_id, "king"):
+        newly_unlocked.append("king")
+    if total >= 200 and unlock_achievement(chat_id, user_id, "legend_plus"):
+        newly_unlocked.append("legend_plus")
+    if total >= 500 and unlock_achievement(chat_id, user_id, "immortal"):
+        newly_unlocked.append("immortal")
+    if total >= 1000 and unlock_achievement(chat_id, user_id, "god_of_love"):
+        newly_unlocked.append("god_of_love")
 
-    # ۲. عاشق مبتدی
-    if total >= 5:
-        if unlock_achievement(chat_id, user_id, "beginner"):
-            newly_unlocked.append("beginner")
-
-    # ۳. لاور حرفه‌ای
-    if total >= 15:
-        if unlock_achievement(chat_id, user_id, "pro"):
-            newly_unlocked.append("pro")
-
-    # ۴. افسانه عشق
-    if total >= 50:
-        if unlock_achievement(chat_id, user_id, "legend"):
-            newly_unlocked.append("legend")
-
-    # ۵. پادشاه/ملکه عشق
-    if total >= 100:
-        if unlock_achievement(chat_id, user_id, "king"):
-            newly_unlocked.append("king")
-
-    # ۶ و ۷. وفادار و خیلی وفادار
+    # وفاداری
     if partner_stats:
         max_with_one = max([p["count"] for p in partner_stats])
-        if max_with_one >= 3:
-            if unlock_achievement(chat_id, user_id, "loyal"):
-                newly_unlocked.append("loyal")
-        if max_with_one >= 7:
-            if unlock_achievement(chat_id, user_id, "super_loyal"):
-                newly_unlocked.append("super_loyal")
+        if max_with_one >= 3 and unlock_achievement(chat_id, user_id, "loyal"):
+            newly_unlocked.append("loyal")
+        if max_with_one >= 7 and unlock_achievement(chat_id, user_id, "super_loyal"):
+            newly_unlocked.append("super_loyal")
+        if max_with_one >= 6 and unlock_achievement(chat_id, user_id, "forbidden"):
+            newly_unlocked.append("forbidden")
 
-    # ۸ و ۹. تنوع‌طلب
-    if unique_partners >= 10:
-        if unlock_achievement(chat_id, user_id, "diverse"):
-            newly_unlocked.append("diverse")
-    if unique_partners >= 25:
-        if unlock_achievement(chat_id, user_id, "super_diverse"):
-            newly_unlocked.append("super_diverse")
+    # تنوع
+    if unique_partners >= 10 and unlock_achievement(chat_id, user_id, "diverse"):
+        newly_unlocked.append("diverse")
+    if unique_partners >= 15 and unlock_achievement(chat_id, user_id, "popular"):
+        newly_unlocked.append("popular")
+    if unique_partners >= 25 and unlock_achievement(chat_id, user_id, "super_diverse"):
+        newly_unlocked.append("super_diverse")
+    if unique_partners >= 30 and unlock_achievement(chat_id, user_id, "social_butterfly"):
+        newly_unlocked.append("social_butterfly")
 
-    # ۱۴. شب‌زنده‌دار (ساعت ۱۲ تا ۵ صبح)
-    now = datetime.now()
-    if 0 <= now.hour < 5:
+    # زمان
+    if 0 <= hour < 5:
         if unlock_achievement(chat_id, user_id, "night_owl"):
             newly_unlocked.append("night_owl")
+        if extra.get("night_count", 0) >= 10 and unlock_achievement(chat_id, user_id, "night_king"):
+            newly_unlocked.append("night_king")
+            
+    if 5 <= hour < 8 and unlock_achievement(chat_id, user_id, "early_bird"):
+        newly_unlocked.append("early_bird")
+        
+    if 5 <= hour < 9:
+        if extra.get("morning_count", 0) >= 10 and unlock_achievement(chat_id, user_id, "morning_person"):
+            newly_unlocked.append("morning_person")
 
-    # اعلام دستاوردهای جدید
+    # آخر هفته (جمعه=۴ ، شنبه=۵)
+    if weekday in [4, 5] and unlock_achievement(chat_id, user_id, "weekend_lover"):
+        newly_unlocked.append("weekend_lover")
+
+    # رگبار
+    streak = extra.get("current_streak", 0)
+    if streak >= 3 and unlock_achievement(chat_id, user_id, "streak_3"):
+        newly_unlocked.append("streak_3")
+    if streak >= 7 and unlock_achievement(chat_id, user_id, "streak_7"):
+        newly_unlocked.append("streak_7")
+    if streak >= 7 and unlock_achievement(chat_id, user_id, "unstoppable"):
+        newly_unlocked.append("unstoppable")
+    if streak >= 15 and unlock_achievement(chat_id, user_id, "streak_15"):
+        newly_unlocked.append("streak_15")
+
+    # بازگشت
+    last_date = extra.get("last_couple_date")
+    if last_date:
+        try:
+            last = datetime.fromisoformat(last_date)
+            days_absent = (now - last).days
+            if days_absent >= 14 and unlock_achievement(chat_id, user_id, "comeback"):
+                newly_unlocked.append("comeback")
+        except:
+            pass
+
+    # لاور سریالی (۵ بار در یک روز)
+    today_str = now.strftime("%Y-%m-%d")
+    if extra.get("daily_count", {}).get(today_str, 0) >= 5:
+        if unlock_achievement(chat_id, user_id, "serial_lover"):
+            newly_unlocked.append("serial_lover")
+
+    # روح (فقط خودکار)
+    if extra.get("auto_count", 0) >= 10 and unlock_achievement(chat_id, user_id, "ghost"):
+        newly_unlocked.append("ghost")
+
+    # عاشق ساکت
+    if extra.get("auto_count", 0) >= 10 and extra.get("manual_count", 0) == 0:
+        if unlock_achievement(chat_id, user_id, "silent_lover"):
+            newly_unlocked.append("silent_lover")
+
+    # شعله دوقلو
+    last_partners = extra.get("last_partners", [])
+    if len(last_partners) >= 2 and last_partners[0] == last_partners[1]:
+        if unlock_achievement(chat_id, user_id, "twin_flame"):
+            newly_unlocked.append("twin_flame")
+
+    # پروفایل کامل
+    profile = get_user_profile(chat_id, user_id)
+    if profile.get("gender") and profile.get("interest"):
+        if unlock_achievement(chat_id, user_id, "profile_master"):
+            newly_unlocked.append("profile_master")
+
+    # مچ کامل و تضاد جذاب
+    if partner_id:
+        partner_profile = get_user_profile(chat_id, partner_id)
+        user_interest = profile.get("interest")
+        partner_interest = partner_profile.get("interest")
+        user_gender = profile.get("gender")
+        partner_gender = partner_profile.get("gender")
+        
+        if user_interest and partner_interest and user_interest == partner_interest:
+            if unlock_achievement(chat_id, user_id, "perfect_match"):
+                newly_unlocked.append("perfect_match")
+                
+        if user_gender in ["male", "female"] and partner_gender in ["male", "female"]:
+            if user_gender != partner_gender:
+                if unlock_achievement(chat_id, user_id, "opposite_attract"):
+                    newly_unlocked.append("opposite_attract")
+
+    # تعداد دستورات
+    if extra.get("couple_commands", 0) >= 50 and unlock_achievement(chat_id, user_id, "command_king"):
+        newly_unlocked.append("command_king")
+    if extra.get("fall_commands", 0) >= 20 and unlock_achievement(chat_id, user_id, "fortune_teller"):
+        newly_unlocked.append("fortune_teller")
+    if extra.get("ask_commands", 0) >= 30 and unlock_achievement(chat_id, user_id, "curious"):
+        newly_unlocked.append("curious")
+
+    # جمع‌کننده مدال
+    total_unlocked = len(get_user_achievements(chat_id, user_id))
+    if total_unlocked >= 10 and unlock_achievement(chat_id, user_id, "collector"):
+        newly_unlocked.append("collector")
+    if total_unlocked >= 20 and unlock_achievement(chat_id, user_id, "master_collector"):
+        newly_unlocked.append("master_collector")
+
+    # کهنه‌کار
+    first_activity = extra.get("first_activity")
+    if first_activity and total >= 10:
+        try:
+            first = datetime.fromisoformat(first_activity)
+            if (now - first).days >= 30:
+                if unlock_achievement(chat_id, user_id, "veteran"):
+                    newly_unlocked.append("veteran")
+        except:
+            pass
+
+    # ---------- اعلام دستاوردهای جدید ----------
     if newly_unlocked and bot:
         for ach_id in newly_unlocked:
             ach = ACHIEVEMENTS.get(ach_id, {})
@@ -352,7 +460,7 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
             emoji = ach.get("emoji", "🏅")
             desc = ach.get("description", "")
 
-            # پیام در گروه
+            # پیام گروه
             try:
                 bot.send_message(
                     chat_id=chat_id,
@@ -369,9 +477,7 @@ def check_and_unlock_achievements(chat_id, user_id, user_name, partner_id=None, 
             try:
                 bot.send_message(
                     chat_id=user_id,
-                    text=f"🎉 دستاورد جدید گرفتی!\n\n"
-                         f"{emoji} **{name}**\n"
-                         f"📝 {desc}"
+                    text=f"🎉 دستاورد جدید گرفتی!\n\n{emoji} **{name}**\n📝 {desc}"
                 )
             except:
                 pass
@@ -579,6 +685,12 @@ def blocked_list_command(update: Update, context: CallbackContext):
 
 # ==================== دستور /fall ====================
 def fall_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    
+    # افزایش شمارنده فال
+    increment_command_count(chat_id, user_id, "fall")
+    
     msg = update.message.reply_text("🔮 در حال گرفتن فال حافظ...")
     
     try:
@@ -687,6 +799,12 @@ def event_command(update: Update, context: CallbackContext):
 
 # ==================== دستور /ask ====================
 def ask_command(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    
+    # افزایش شمارنده پرسش از هوش مصنوعی
+    increment_command_count(chat_id, user_id, "ask")
+    
     user_message = ' '.join(context.args)
     reply_to_message = update.message.reply_to_message
     
@@ -741,7 +859,6 @@ def handle_reply(update: Update, context: CallbackContext):
     try:
         if not update.message:
             return
-        
         if not update.message.reply_to_message:
             return
         
@@ -756,6 +873,11 @@ def handle_reply(update: Update, context: CallbackContext):
         user_message = update.message.text
         if not user_message:
             return
+        
+        # افزایش شمارنده
+        chat_id = update.effective_chat.id
+        user_id = update.effective_user.id
+        increment_command_count(chat_id, user_id, "ask")
         
         loading_msg = update.message.reply_text("🤔 در حال فکر کردن...")
         
@@ -846,6 +968,8 @@ def button_callback(update: Update, context: CallbackContext):
 # ==================== انتخاب زوج ====================
 def couple_command(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    
     update.message.reply_text("🔄 در حال انتخاب زوج...")
     
     members = get_members(chat_id)
@@ -853,7 +977,9 @@ def couple_command(update: Update, context: CallbackContext):
         update.message.reply_text("❌ تعداد اعضا کافی نیست. ابتدا /update را بزنید.")
         return
     
-    user_id = update.effective_user.id
+    # افزایش شمارنده دستور
+    increment_command_count(chat_id, user_id, "couple")
+    
     user_profile = get_user_profile(chat_id, user_id)
     user_gender = user_profile.get("gender")
     
@@ -878,16 +1004,29 @@ def couple_command(update: Update, context: CallbackContext):
     # ترجیح علاقه مشترک
     user_interest = user_profile.get("interest")
     if user_interest:
-        interest_matched = [m for m in available_members if get_user_profile(chat_id, m["id"]).get("interest") == user_interest]
-        selected = random.sample(interest_matched, 2) if len(interest_matched) >= 2 else random.sample(available_members, 2)
+        interest_matched = [
+            m for m in available_members 
+            if get_user_profile(chat_id, m["id"]).get("interest") == user_interest
+        ]
+        if len(interest_matched) >= 2:
+            selected = random.sample(interest_matched, 2)
+        else:
+            selected = random.sample(available_members, 2)
     else:
         selected = random.sample(available_members, 2)
     
     user1, user2 = selected[0], selected[1]
+    
+    # ذخیره زوج
     save_couple(chat_id, user1, user2)
     
+    # امتیاز هفتگی
     update_weekly_score(chat_id, user1["id"])
     update_weekly_score(chat_id, user2["id"])
+    
+    # ثبت اطلاعات برای دستاوردها
+    record_couple_for_achievements(chat_id, user1["id"], user2["id"], is_auto=False)
+    record_couple_for_achievements(chat_id, user2["id"], user1["id"], is_auto=False)
     
     fortune = get_daily_fortune()
     
@@ -908,9 +1047,9 @@ def couple_command(update: Update, context: CallbackContext):
     
     update.message.reply_text(msg, parse_mode="Markdown")
     
-    # ===== چک کردن دستاوردها =====
-    check_and_unlock_achievements(chat_id, user1["id"], user1["name"], user2["id"], context.bot)
-    check_and_unlock_achievements(chat_id, user2["id"], user2["name"], user1["id"], context.bot)
+    # چک و آنلاک دستاوردها
+    check_and_unlock_achievements(chat_id, user1["id"], user1["name"], user2["id"], context.bot, is_auto=False)
+    check_and_unlock_achievements(chat_id, user2["id"], user2["name"], user1["id"], context.bot, is_auto=False)
     
     logger.info(f"✅ زوج انتخاب شد برای گروه {chat_id}")
 # ==================== برترین‌های هفته ====================
@@ -1315,18 +1454,28 @@ def daily_job(context: CallbackContext):
     bot = context.bot
     
     logger.info(f"🔄 انتخاب زوج روزانه برای گروه {chat_id}...")
+    
     members = update_members_sync(chat_id)
     if not members or len(members) < 2:
-        bot.send_message(chat_id=chat_id, text="❌ تعداد اعضا کافی نیست.")
+        try:
+            bot.send_message(chat_id=chat_id, text="❌ تعداد اعضا کافی نیست.")
+        except:
+            pass
         return
     
-    available_members = members[:]  # دیگه بلاک نداریم
+    # انتخاب تصادفی (بدون بلک‌لیست)
+    user1, user2 = random.sample(members, 2)
     
-    user1, user2 = random.sample(available_members, 2)
+    # ذخیره زوج
     save_couple(chat_id, user1, user2)
     
+    # امتیاز هفتگی
     update_weekly_score(chat_id, user1["id"])
     update_weekly_score(chat_id, user2["id"])
+    
+    # ثبت اطلاعات برای دستاوردها (خودکار)
+    record_couple_for_achievements(chat_id, user1["id"], user2["id"], is_auto=True)
+    record_couple_for_achievements(chat_id, user2["id"], user1["id"], is_auto=True)
     
     fortune = get_daily_fortune()
     
@@ -1344,14 +1493,16 @@ def daily_job(context: CallbackContext):
 
 🌟 فال امروز: {fortune}"""
     
-    bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
+    try:
+        bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"❌ خطا در ارسال پیام زوج روزانه: {e}")
     
-    # چک دستاورد
-    check_and_unlock_achievements(chat_id, user1["id"], user1["name"], user2["id"], bot)
-    check_and_unlock_achievements(chat_id, user2["id"], user2["name"], user1["id"], bot)
+    # چک و آنلاک دستاوردها
+    check_and_unlock_achievements(chat_id, user1["id"], user1["name"], user2["id"], bot, is_auto=True)
+    check_and_unlock_achievements(chat_id, user2["id"], user2["name"], user1["id"], bot, is_auto=True)
     
     logger.info(f"✅ زوج روزانه انتخاب شد برای گروه {chat_id}")
-
 def schedule_job_for_group(dispatcher, chat_id):
     """زمان‌بندی Job چهارساعته برای یک گروه خاص"""
     job_queue = dispatcher.job_queue
